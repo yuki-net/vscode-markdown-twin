@@ -11,7 +11,7 @@ import { TooManyRequestsError } from './providers/httpError';
 import { ApiKeyManager } from './apiKeyManager';
 import { StatusBar } from './statusBar';
 import { shouldTranslate, splitTranslatableParts, joinTranslatedParts, EXCLUDED_TOKEN_TYPES } from './languageDetector';
-import { resolveSourceLanguageCode, normalizeTargetLanguageCode } from './languages';
+import { resolveSourceLanguageCode } from './languages';
 import { t } from './i18n';
 import { PreviewPanel } from './previewPanel';
 import { buildTranslatedMarkdown, type TranslatedMarkdownResult, type TranslationViewMode } from './translatedMarkdownBuilder';
@@ -20,11 +20,11 @@ import { TranslationCache } from './translationCache';
 
 export class TranslationManager implements vscode.Disposable {
   private cache = new TranslationCache();
-  private translationActive = false;
+  private activeDocumentUris = new Set<string>();
   private currentMode: TranslationViewMode = 'translation-only';
   private statusBar: StatusBar | null = null;
   private md = new MarkdownIt();
-  private currentTranslationSessionId = 0;
+  private translationSessionIds = new Map<string, number>();
   private currentSourceLang = 'auto';
   private outputChannel = vscode.window.createOutputChannel('Markdown Twin');
 
@@ -71,7 +71,11 @@ export class TranslationManager implements vscode.Disposable {
   }
 
   isActive(): boolean {
-    return this.translationActive;
+    return this.activeDocumentUris.size > 0;
+  }
+
+  isDocumentActive(uri: vscode.Uri): boolean {
+    return this.activeDocumentUris.has(uri.toString());
   }
 
   getMode(): TranslationViewMode {
@@ -116,7 +120,17 @@ export class TranslationManager implements vscode.Disposable {
       return false;
     }
 
-    const sessionId = ++this.currentTranslationSessionId;
+    const docUriStr = document.uri.toString();
+    const panelsForDoc = Array.from(PreviewPanel.allPanels.values()).filter(
+      p => p.editorDocumentUri.toString() === docUriStr
+    );
+    if (panelsForDoc.length === 0) {
+      this.logWarning(`Skip translation without an open Twin panel: ${docUriStr}`);
+      this.stopDocumentTranslation(document.uri);
+      return false;
+    }
+
+    const sessionId = this.beginDocumentSession(document.uri);
 
     const config = vscode.workspace.getConfiguration('markdownTwin');
     const providerId = normalizeProviderId(overrideProvider ?? config.get<string>('provider'));
@@ -124,14 +138,9 @@ export class TranslationManager implements vscode.Disposable {
 
     const sourceLang = resolveSourceLanguageCode(config.get<string>('sourceLanguage') ?? 'auto');
     this.currentSourceLang = sourceLang;
-    const defaultTargetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
     const batchSize = normalizeBatchSize(config.get<number>('batchSize'));
 
-    const docUriStr = document.uri.toString();
-    const panelsForDoc = Array.from(PreviewPanel.allPanels.values()).filter(
-      p => p.editorDocumentUri.toString() === docUriStr
-    );
-    const targetLangs = panelsForDoc.length > 0 ? panelsForDoc.map(p => p.langCode) : [defaultTargetLang];
+    const targetLangs = panelsForDoc.map(p => p.langCode);
     this.logInfo(
       `Start translation: provider=${providerId}, source=${sourceLang}, targets=${targetLangs.join(',')}, uri=${document.uri.toString()}`
     );
@@ -142,20 +151,20 @@ export class TranslationManager implements vscode.Disposable {
         const displayName = PROVIDER_DISPLAY_NAMES[providerId] ?? providerId;
         this.logError(t('apiKeyNotSetForProvider', displayName), undefined, false);
         this.statusBar?.showError();
-        return this.failStartTranslation(sessionId);
+        return this.failStartTranslation(document.uri, sessionId);
       }
     }
 
     const provider = await createTranslationProvider(providerId, this.apiKeyManager);
     if (!provider) {
       this.statusBar?.showError();
-      return this.failStartTranslation(sessionId);
+      return this.failStartTranslation(document.uri, sessionId);
     }
-    if (this.currentTranslationSessionId !== sessionId) {
+    if (!this.isCurrentDocumentSession(document.uri, sessionId)) {
       return false;
     }
 
-    this.translationActive = true;
+    this.activeDocumentUris.add(docUriStr);
     const currentTexts = this.extractTranslatableTexts(document, sourceLang);
     const { langToTranslateMap, totalCount } = this.cache.preparePendingTranslations(
       document.uri, targetLangs, currentTexts
@@ -184,11 +193,13 @@ export class TranslationManager implements vscode.Disposable {
     );
   }
 
-  private failStartTranslation(sessionId: number): false {
-    if (this.currentTranslationSessionId === sessionId) {
-      this.translationActive = false;
-      this.statusBar?.setActiveProvider(null);
-      this.onTranslationUpdatedEmitter.fire(undefined);
+  private failStartTranslation(documentUri: vscode.Uri, sessionId: number): false {
+    if (this.isCurrentDocumentSession(documentUri, sessionId)) {
+      this.activeDocumentUris.delete(documentUri.toString());
+      if (!this.isActive()) {
+        this.statusBar?.setActiveProvider(null);
+      }
+      this.onTranslationUpdatedEmitter.fire(documentUri);
     }
     return false;
   }
@@ -228,14 +239,14 @@ export class TranslationManager implements vscode.Disposable {
     this.onTranslationUpdatedEmitter.fire(documentUri);
 
     for (const targetLang of targetLangs) {
-      if (fatalError || !this.translationActive || this.currentTranslationSessionId !== sessionId) break;
+      if (fatalError || !this.isDocumentActive(documentUri) || !this.isCurrentDocumentSession(documentUri, sessionId)) break;
       const textsToTranslate = langToTranslateMap.get(targetLang) ?? [];
       if (textsToTranslate.length === 0) continue;
 
       const docCache = this.cache.ensureDocumentCache(documentUri, targetLang);
 
       for (let i = 0; i < textsToTranslate.length; i += batchSize) {
-        if (fatalError || !this.translationActive || this.currentTranslationSessionId !== sessionId) break;
+        if (fatalError || !this.isDocumentActive(documentUri) || !this.isCurrentDocumentSession(documentUri, sessionId)) break;
         const batch = textsToTranslate.slice(i, i + batchSize);
         this.logInfo(
           `Translating batch: provider=${providerName}, target=${targetLang}, size=${batch.length}, offset=${i}`
@@ -273,20 +284,20 @@ export class TranslationManager implements vscode.Disposable {
           }
         }
 
-        if (fatalError || this.currentTranslationSessionId !== sessionId) break;
+        if (fatalError || !this.isCurrentDocumentSession(documentUri, sessionId)) break;
 
         accumulatedDone += batch.length;
         this.statusBar?.showProgress(accumulatedDone, totalCount);
         this.onTranslationUpdatedEmitter.fire(documentUri);
       }
     }
-    if (!fatalError && this.translationActive && this.currentTranslationSessionId === sessionId) {
+    if (!fatalError && this.isDocumentActive(documentUri) && this.isCurrentDocumentSession(documentUri, sessionId)) {
       this.statusBar?.showComplete(this.currentMode);
       return true;
     }
 
-    if (fatalError && this.currentTranslationSessionId === sessionId) {
-      this.translationActive = false;
+    if (fatalError && this.isCurrentDocumentSession(documentUri, sessionId)) {
+      this.activeDocumentUris.delete(documentUri.toString());
     }
 
     return false;
@@ -295,7 +306,7 @@ export class TranslationManager implements vscode.Disposable {
   private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   invalidateCache(uri: vscode.Uri): void {
-    if (this.translationActive) {
+    if (this.isDocumentActive(uri) && this.hasOpenPanelForDocument(uri)) {
       const uriStr = uri.toString();
       const existing = this.debounceTimers.get(uriStr);
       if (existing) {
@@ -306,7 +317,7 @@ export class TranslationManager implements vscode.Disposable {
       const timer = setTimeout(() => {
         this.debounceTimers.delete(uriStr);
         const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uriStr);
-        if (doc) {
+        if (doc && this.isDocumentActive(uri) && this.hasOpenPanelForDocument(uri)) {
           void this.startTranslation(doc);
         }
       }, delay);
@@ -315,6 +326,10 @@ export class TranslationManager implements vscode.Disposable {
   }
 
   closeDocument(uri: vscode.Uri): void {
+    this.stopDocumentTranslation(uri);
+  }
+
+  stopDocumentTranslation(uri: vscode.Uri): void {
     const uriStr = uri.toString();
     const timer = this.debounceTimers.get(uriStr);
     if (timer) {
@@ -322,25 +337,35 @@ export class TranslationManager implements vscode.Disposable {
       this.debounceTimers.delete(uriStr);
     }
 
+    this.activeDocumentUris.delete(uriStr);
+    this.translationSessionIds.set(uriStr, (this.translationSessionIds.get(uriStr) ?? 0) + 1);
+
     const count = this.cache.releaseDocument(uri);
 
     if (count > 0) {
       this.logInfo(`Cache released for closed document (all languages): ${uri.toString()}`);
     }
+
+    if (!this.isActive()) {
+      this.statusBar?.setActiveProvider(null);
+      this.statusBar?.showOffline();
+    }
+    this.onTranslationUpdatedEmitter.fire(uri);
   }
 
   stopTranslation(): void {
-    this.translationActive = false;
+    this.activeDocumentUris.clear();
+    this.invalidateAllDocumentSessions();
     this.debounceTimers.forEach(clearTimeout);
     this.debounceTimers.clear();
     this.cache.clear();
-    this.currentTranslationSessionId++;
     this.statusBar?.setActiveProvider(null);
     this.statusBar?.showOffline();
     this.onTranslationUpdatedEmitter.fire(undefined);
   }
 
   clearAllCache(): void {
+    this.invalidateAllDocumentSessions();
     this.cache.clear();
     this.onTranslationUpdatedEmitter.fire(undefined);
   }
@@ -348,6 +373,30 @@ export class TranslationManager implements vscode.Disposable {
   clearDocumentCache(uri: vscode.Uri): void {
     this.cache.clearDocument(uri);
     this.onTranslationUpdatedEmitter.fire(uri);
+  }
+
+  private beginDocumentSession(uri: vscode.Uri): number {
+    const uriStr = uri.toString();
+    const sessionId = (this.translationSessionIds.get(uriStr) ?? 0) + 1;
+    this.translationSessionIds.set(uriStr, sessionId);
+    return sessionId;
+  }
+
+  private isCurrentDocumentSession(uri: vscode.Uri, sessionId: number): boolean {
+    return this.translationSessionIds.get(uri.toString()) === sessionId;
+  }
+
+  private invalidateAllDocumentSessions(): void {
+    for (const [uriStr, sessionId] of this.translationSessionIds) {
+      this.translationSessionIds.set(uriStr, sessionId + 1);
+    }
+  }
+
+  private hasOpenPanelForDocument(uri: vscode.Uri): boolean {
+    const uriStr = uri.toString();
+    return Array.from(PreviewPanel.allPanels.values()).some(
+      panel => panel.editorDocumentUri.toString() === uriStr
+    );
   }
 
   generateTranslatedMarkdown(

@@ -22,6 +22,10 @@ export async function runTranslationForDocument(
   }
 
   const success = await translationManager.startTranslation(document, options?.overrideProvider);
-  await vscode.commands.executeCommand('setContext', 'markdownTwin.translationActive', success);
+  await vscode.commands.executeCommand(
+    'setContext',
+    'markdownTwin.translationActive',
+    translationManager.isActive()
+  );
   return success;
 }

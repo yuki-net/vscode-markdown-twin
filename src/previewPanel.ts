@@ -445,6 +445,13 @@ export class PreviewPanel {
     const panelKey = `${uriStr}@${this.langCode}`;
     PreviewPanel.allPanels.delete(panelKey);
 
+    const hasRemainingPanelForDocument = Array.from(PreviewPanel.allPanels.values()).some(
+      panel => panel.editorDocumentUri.toString() === uriStr
+    );
+    if (!hasRemainingPanelForDocument) {
+      this.translationManager.stopDocumentTranslation(this._document.uri);
+    }
+
     if (PreviewPanel.currentPanel === this) {
       const remaining = Array.from(PreviewPanel.allPanels.values());
       PreviewPanel.currentPanel = remaining.length > 0 ? remaining[remaining.length - 1] : undefined;
