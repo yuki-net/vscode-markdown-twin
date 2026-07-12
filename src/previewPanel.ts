@@ -32,7 +32,8 @@ export class PreviewPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
-  private _editor: vscode.TextEditor;
+  private _editor: vscode.TextEditor | undefined;
+  private readonly _document: vscode.TextDocument;
   private _isInitialized = false;
   private _isDisposed = false;
   private _renderGeneration = 0;
@@ -45,11 +46,11 @@ export class PreviewPanel {
   private _lastSyncedLine = 0;
 
   public get editorDocumentUri(): vscode.Uri {
-    return this._editor.document.uri;
+    return this._document.uri;
   }
 
   public get editorDocument(): vscode.TextDocument {
-    return this._editor.document;
+    return this._document;
   }
 
   public static configureHighlightService(highlightService: TextMateHighlightService): void {
@@ -91,7 +92,8 @@ export class PreviewPanel {
   }
 
   private static async resolveEditorForDocument(
-    document: vscode.TextDocument
+    document: vscode.TextDocument,
+    openIfNeeded = true
   ): Promise<vscode.TextEditor | undefined> {
     const activeEditor = vscode.window.activeTextEditor;
     if (activeEditor?.document.uri.toString() === document.uri.toString()) {
@@ -103,6 +105,10 @@ export class PreviewPanel {
     );
     if (visibleEditor) {
       return visibleEditor;
+    }
+
+    if (!openIfNeeded) {
+      return undefined;
     }
 
     try {
@@ -118,20 +124,22 @@ export class PreviewPanel {
   public static async createOrShow(
     extensionUri: vscode.Uri,
     translationManager: TranslationManager,
-    document?: vscode.TextDocument
+    document?: vscode.TextDocument,
+    options: { avoidOpeningSource?: boolean } = {}
   ): Promise<boolean> {
-    const activeEditor = document
-      ? await PreviewPanel.resolveEditorForDocument(document)
+    const editor = document
+      ? await PreviewPanel.resolveEditorForDocument(document, !options.avoidOpeningSource)
       : vscode.window.activeTextEditor;
-    if (!activeEditor || activeEditor.document.languageId !== 'markdown') {
+    const previewDocument = document ?? editor?.document;
+    if (!previewDocument || previewDocument.languageId !== 'markdown') {
       vscode.window.showErrorMessage(t('noActiveEditor'));
       return false;
     }
 
     const code = getTargetLanguageCode();
-    const uriStr = activeEditor.document.uri.toString();
+    const uriStr = previewDocument.uri.toString();
     const panelKey = `${uriStr}@${code}`;
-    const column = activeEditor.viewColumn;
+    const column = editor?.viewColumn ?? vscode.window.tabGroups.activeTabGroup.viewColumn;
     const targetColumn = column ? column + 1 : vscode.ViewColumn.Two;
 
     const existing = PreviewPanel.allPanels.get(panelKey);
@@ -146,11 +154,11 @@ export class PreviewPanel {
 
     const panel = vscode.window.createWebviewPanel(
       PreviewPanel.viewType,
-      t('previewTitle', path.basename(activeEditor.document.fileName)),
+      t('previewTitle', path.basename(previewDocument.fileName)),
       targetColumn,
       {
         enableScripts: true,
-        localResourceRoots: createLocalResourceRoots(extensionUri, activeEditor.document),
+        localResourceRoots: createLocalResourceRoots(extensionUri, previewDocument),
         retainContextWhenHidden: true
       }
     );
@@ -164,7 +172,8 @@ export class PreviewPanel {
     const newPanel = new PreviewPanel(
       panel,
       extensionUri,
-      activeEditor,
+      previewDocument,
+      editor,
       translationManager,
       PreviewPanel.highlightService,
       code
@@ -178,15 +187,17 @@ export class PreviewPanel {
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
-    editor: vscode.TextEditor,
+    document: vscode.TextDocument,
+    editor: vscode.TextEditor | undefined,
     private translationManager: TranslationManager,
     private readonly highlightService: TextMateHighlightService,
     langCode: string
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
+    this._document = document;
     this._editor = editor;
-    this._lastSyncedLine = editor.visibleRanges[0]?.start.line ?? 0;
+    this._lastSyncedLine = editor?.visibleRanges[0]?.start.line ?? 0;
     this.langCode = langCode;
 
     void this._update();
@@ -206,7 +217,7 @@ export class PreviewPanel {
         if (!this._panel.active) return;
         PreviewPanel.currentPanel = this;
         if (this.translationManager.isActive()) {
-          void runTranslationForDocument(this.translationManager, this._editor.document);
+          void runTranslationForDocument(this.translationManager, this._document);
         } else {
           void this._update();
         }
@@ -238,7 +249,7 @@ export class PreviewPanel {
   private _registerWorkspaceListeners(): void {
     vscode.workspace.onDidChangeTextDocument(
       e => {
-        if (e.document.uri.toString() === this._editor.document.uri.toString() && this._isSameDocAsActive) {
+        if (e.document.uri.toString() === this._document.uri.toString() && this._isSameDocAsActive) {
           void this._update();
         }
       },
@@ -289,7 +300,7 @@ export class PreviewPanel {
   private _registerTranslationUpdates(): void {
     this._disposables.push(
       this.translationManager.onTranslationUpdated((updatedUri) => {
-        const docUriStr = this._editor.document.uri.toString();
+        const docUriStr = this._document.uri.toString();
         if (!updatedUri || updatedUri.toString() === docUriStr) {
           void this._update();
         }
@@ -300,7 +311,7 @@ export class PreviewPanel {
   private get _isSameDocAsActive(): boolean {
     return !!(
       PreviewPanel.currentPanel &&
-      PreviewPanel.currentPanel.editorDocumentUri.toString() === this._editor.document.uri.toString()
+      PreviewPanel.currentPanel.editorDocumentUri.toString() === this._document.uri.toString()
     );
   }
 
@@ -314,7 +325,7 @@ export class PreviewPanel {
   }
 
   private _isEditorForDocument(editor: vscode.TextEditor | undefined): editor is vscode.TextEditor {
-    return !!editor && editor.document.uri.toString() === this._editor.document.uri.toString();
+    return !!editor && editor.document.uri.toString() === this._document.uri.toString();
   }
 
   private _handleScrollMessage(line: number, revealLogicalLine = false) {
@@ -323,19 +334,19 @@ export class PreviewPanel {
       this._editor = visibleEditor;
     }
     const range = revealLogicalLine ? this._toLogicalLineRevealRange(line) : this._toRevealRange(line);
-    this._editor.revealRange(range, vscode.TextEditorRevealType.AtTop);
+    this._editor?.revealRange(range, vscode.TextEditorRevealType.AtTop);
   }
 
   private _toLogicalLineRevealRange(line: number): vscode.Range {
-    const lineCount = this._editor.document.lineCount;
+    const lineCount = this._document.lineCount;
     const sourceLine = Math.max(0, Math.min(Math.floor(line), lineCount - 1));
     return new vscode.Range(sourceLine, 0, sourceLine, 0);
   }
 
   private _toRevealRange(line: number): vscode.Range {
-    const lineCount = this._editor.document.lineCount;
+    const lineCount = this._document.lineCount;
     const sourceLine = Math.max(0, Math.min(Math.floor(line), lineCount - 1));
-    const lineText = this._editor.document.lineAt(sourceLine).text;
+    const lineText = this._document.lineAt(sourceLine).text;
     const fraction = Math.max(0, Math.min(1, line - sourceLine));
     const startCharacter = Math.floor(fraction * lineText.length);
     const endLine = Math.min(sourceLine + 1, lineCount - 1);
@@ -346,7 +357,7 @@ export class PreviewPanel {
 
   private async renderPreviewHtml(translated: TranslatedMarkdownResult): Promise<string> {
     const webview = this._panel.webview;
-    const document = this._editor.document;
+    const document = this._document;
     const previewConfig = vscode.workspace.getConfiguration('markdown.preview');
     return renderMarkdownPreview(translated, {
       breaks: previewConfig.get<boolean>('breaks'),
@@ -363,7 +374,7 @@ export class PreviewPanel {
   private async _update() {
     const renderGeneration = ++this._renderGeneration;
     const webview = this._panel.webview;
-    const document = this._editor.document;
+    const document = this._document;
     const shouldRenderPreview = this._viewMode === 'preview' || !this._isInitialized;
     const shouldRenderSource = this._viewMode === 'source';
     const previewTranslated = this.translationManager.generateTranslatedMarkdown(document, this.langCode);
@@ -430,7 +441,7 @@ export class PreviewPanel {
     if (this._isDisposed) return;
     this._isDisposed = true;
 
-    const uriStr = this._editor.document.uri.toString();
+    const uriStr = this._document.uri.toString();
     const panelKey = `${uriStr}@${this.langCode}`;
     PreviewPanel.allPanels.delete(panelKey);
 

@@ -30,20 +30,63 @@ interface ExtensionServices {
   providerSelector: ProviderSelector;
 }
 
+interface TranslationDocumentResolution {
+  document: vscode.TextDocument;
+  avoidOpeningSource: boolean;
+}
+
+function getNativeMarkdownPreviewDocumentUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputCustom && input.viewType === 'vscode.markdown.preview.editor') {
+    return input.uri;
+  }
+  return undefined;
+}
+
+function isLegacyNativeMarkdownPreviewActive(): boolean {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  return input instanceof vscode.TabInputWebview && input.viewType === 'markdown.preview';
+}
+
 function syncTargetLangContext(): void {
   const code = getTargetLanguageCode();
   void vscode.commands.executeCommand('setContext', 'markdownTwin.targetLang', code);
 }
 
-function resolveTranslationDocument(): vscode.TextDocument | undefined {
+async function resolveTranslationDocument(): Promise<TranslationDocumentResolution | undefined> {
+  const nativePreviewUri = getNativeMarkdownPreviewDocumentUri();
+  if (nativePreviewUri) {
+    try {
+      const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === nativePreviewUri.toString())
+        ?? await vscode.workspace.openTextDocument(nativePreviewUri);
+      if (document.languageId === 'markdown') {
+        return { document, avoidOpeningSource: true };
+      }
+    } catch {
+      // Fall through to the regular editor and Twin panel lookup below.
+    }
+  }
+
+  if (isLegacyNativeMarkdownPreviewActive()) {
+    try {
+      await vscode.commands.executeCommand('markdown.showSource');
+      const sourceEditor = vscode.window.activeTextEditor;
+      if (sourceEditor?.document.languageId === 'markdown') {
+        return { document: sourceEditor.document, avoidOpeningSource: false };
+      }
+    } catch {
+      // Fall through to the regular editor and Twin panel lookup below.
+    }
+  }
+
   const activeEditor = vscode.window.activeTextEditor;
   if (activeEditor?.document.languageId === 'markdown') {
-    return activeEditor.document;
+    return { document: activeEditor.document, avoidOpeningSource: false };
   }
 
   const panelDoc = PreviewPanel.getActivePanel()?.editorDocument;
   if (panelDoc?.languageId === 'markdown') {
-    return panelDoc;
+    return { document: panelDoc, avoidOpeningSource: false };
   }
 
   return undefined;
@@ -120,11 +163,12 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
       await applyTargetLanguageByCode(requestedLangCode);
     }
 
-    const document = resolveTranslationDocument();
-    if (!document) {
+    const resolution = await resolveTranslationDocument();
+    if (!resolution) {
       vscode.window.showWarningMessage(t('noActiveEditor'));
       return;
     }
+    const { document, avoidOpeningSource } = resolution;
 
     const activeEditor = vscode.window.activeTextEditor;
     const canCreatePanelFromActiveEditor = !!activeEditor && activeEditor.document.uri.toString() === document.uri.toString();
@@ -144,7 +188,7 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
       return;
     }
 
-    if (!canCreatePanelFromActiveEditor) {
+    if (!canCreatePanelFromActiveEditor && !avoidOpeningSource) {
       await vscode.window.showTextDocument(document, { preview: false });
     }
 
@@ -156,7 +200,9 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
 
     const providerId = normalizeProviderId(provider);
 
-    const panelReady = await PreviewPanel.createOrShow(context.extensionUri, translationManager, document);
+    const panelReady = await PreviewPanel.createOrShow(context.extensionUri, translationManager, document, {
+      avoidOpeningSource,
+    });
     if (!panelReady) return;
 
     await runTranslationForDocument(translationManager, document, { overrideProvider: providerId });
