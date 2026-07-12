@@ -182,6 +182,16 @@ function registerConfigurationSync(services: ExtensionServices): void {
         }
       }
 
+      if (e.affectsConfiguration('markdownTwin.sourceLanguage')) {
+        translationManager.clearAllCache();
+
+        if (translationManager.isActive()) {
+          await retranslateActivePreview(translationManager);
+        } else {
+          statusBar.showOffline();
+        }
+      }
+
       if (e.affectsConfiguration('markdownTwin.provider') && !translationManager.isActive()) {
         statusBar.showOffline();
       }

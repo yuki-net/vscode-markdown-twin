@@ -125,7 +125,7 @@ export class TranslationManager implements vscode.Disposable {
     const sourceLang = resolveSourceLanguageCode(config.get<string>('sourceLanguage') ?? 'auto');
     this.currentSourceLang = sourceLang;
     const defaultTargetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
-    const batchSize = config.get<number>('batchSize') ?? 10;
+    const batchSize = normalizeBatchSize(config.get<number>('batchSize'));
 
     const docUriStr = document.uri.toString();
     const panelsForDoc = Array.from(PreviewPanel.allPanels.values()).filter(
@@ -374,4 +374,12 @@ export class TranslationManager implements vscode.Disposable {
     });
   }
 
+}
+
+export function normalizeBatchSize(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 10;
+  }
+
+  return Math.max(1, Math.floor(value));
 }

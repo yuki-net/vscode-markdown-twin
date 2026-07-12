@@ -1,9 +1,17 @@
 import * as vscode from 'vscode';
-import { TranslationManager } from '../translationManager';
+import { normalizeBatchSize, TranslationManager } from '../translationManager';
 
 describe('TranslationManager', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('normalizes invalid batch sizes to a positive integer', () => {
+    expect(normalizeBatchSize(undefined)).toBe(10);
+    expect(normalizeBatchSize(Number.NaN)).toBe(10);
+    expect(normalizeBatchSize(0)).toBe(1);
+    expect(normalizeBatchSize(-2)).toBe(1);
+    expect(normalizeBatchSize(1.9)).toBe(1);
   });
 
   it('persists mode changes to the defaultMode setting', async () => {

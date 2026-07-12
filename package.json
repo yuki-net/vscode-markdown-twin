@@ -558,6 +558,7 @@
         "markdownTwin.batchSize": {
           "type": "number",
           "default": 10,
+          "minimum": 1,
           "description": "%markdownTwin.batchSize.description%",
           "order": 6
         },
