@@ -47,5 +47,10 @@ describe('language configuration consistency', () => {
       expect(menu?.when).toContain('markdownTwin.previewActive');
       expect(menu?.when).toContain("activeWebviewPanelId == 'markdownTwinPreview'");
     }
+
+    expect(editorTitleMenus.find(item => item.command === 'markdownTwin.openPreviewFromSource')?.when)
+      .toContain('markdownTwin.showingSource');
+    expect(editorTitleMenus.find(item => item.command === 'markdownTwin.openTranslatedSource')?.when)
+      .toContain('!markdownTwin.showingSource');
   });
 });

@@ -408,7 +408,7 @@
         },
         {
           "command": "markdownTwin.openPreviewFromSource",
-          "when": "markdownTwin.previewActive && activeWebviewPanelId == 'markdownTwinPreview'",
+          "when": "markdownTwin.previewActive && activeWebviewPanelId == 'markdownTwinPreview' && markdownTwin.showingSource",
           "group": "navigation@4"
         },
         {
