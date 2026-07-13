@@ -1,23 +1,16 @@
 import * as vscode from 'vscode';
 import { normalizeBatchSize, TranslationManager } from '../translationManager';
-import { PreviewPanel } from '../previewPanel';
-
+const targetsByDocument = new Map<string, string[]>();
 const translationTargets = {
-  hasDocument: (documentUri: string) => Array.from(PreviewPanel.allPanels.values()).some(
-    panel => panel.editorDocumentUri.toString() === documentUri
-  ),
-  getTargetLanguages: (documentUri: string) => Array.from(PreviewPanel.allPanels.values())
-    .filter(panel => panel.editorDocumentUri.toString() === documentUri)
-    .map(panel => panel.langCode),
-  getDocumentUris: () => [...new Set(Array.from(PreviewPanel.allPanels.values()).map(
-    panel => panel.editorDocumentUri.toString()
-  ))],
+  hasDocument: (documentUri: string) => targetsByDocument.has(documentUri),
+  getTargetLanguages: (documentUri: string) => targetsByDocument.get(documentUri) ?? [],
+  getDocumentUris: () => [...targetsByDocument.keys()],
 };
 
 describe('TranslationManager', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    PreviewPanel.allPanels.clear();
+    targetsByDocument.clear();
   });
 
   it('normalizes invalid batch sizes to a positive integer', () => {
@@ -78,10 +71,7 @@ describe('TranslationManager', () => {
       languageId: 'markdown',
       getText: () => '原文です。',
     } as any;
-    PreviewPanel.allPanels.set('requirements@ko', {
-      editorDocumentUri: document.uri,
-      langCode: 'ko',
-    } as any);
+    targetsByDocument.set(document.uri.toString(), ['ko']);
 
     const result = await manager.startTranslation(document, 'google-cloud');
 

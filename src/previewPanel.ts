@@ -1,16 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { TranslationCoordinator } from './application/translationCoordinator';
-import { getTargetLanguageCode } from './languages';
-import { t } from './i18n';
-import { isCursor } from './utils';
-import { createLocalResourceRoots, createWebviewNonce, resolveMarkdownResourceUri } from './preview/webviewResources';
+import { createWebviewNonce, resolveMarkdownResourceUri } from './preview/webviewResources';
 import { getMarkdownPreviewBodyClasses, getMarkdownPreviewStyleVars, shouldScrollEditorWithPreview, shouldScrollPreviewWithEditor } from './preview/markdownPreviewSettings';
 import { buildPreviewWebviewHtml } from './preview/webviewHtml';
 import { buildSourceViewModel, emptySourceViewModel } from './preview/sourceViewModel';
 import type { TranslatedMarkdownResult } from './translatedMarkdownBuilder';
 import { renderMarkdownPreview } from './preview/markdownPreviewRenderer';
 import type { TextMateHighlightService } from './preview/highlighting/textMateHighlightService';
+import type { PreviewRegistry } from './previewRegistry';
 
 function normalizeSourcePosition(value: unknown): number {
   const line = Number(value);
@@ -23,10 +21,7 @@ function normalizeSourceAnchorLine(value: unknown): number | undefined {
 }
 
 export class PreviewPanel {
-  public static currentPanel: PreviewPanel | undefined;
-  public static readonly allPanels = new Map<string, PreviewPanel>();
   public static readonly viewType = 'markdownTwinPreview';
-  private static highlightService: TextMateHighlightService | undefined;
 
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
@@ -52,145 +47,34 @@ export class PreviewPanel {
     return this._document;
   }
 
-  public static configureHighlightService(highlightService: TextMateHighlightService): void {
-    PreviewPanel.highlightService = highlightService;
+  public get isActive(): boolean {
+    return this._panel.active;
   }
 
-  public static getActivePanel(): PreviewPanel | undefined {
-    if (PreviewPanel.currentPanel?._panel.active) {
-      PreviewPanel.syncActiveContexts();
-      return PreviewPanel.currentPanel;
-    }
-
-    const active = Array.from(PreviewPanel.allPanels.values()).find(panel => panel._panel.active);
-    if (active) {
-      PreviewPanel.currentPanel = active;
-      PreviewPanel.syncActiveContexts();
-      return active;
-    }
-
-    PreviewPanel.syncActiveContexts();
-    return PreviewPanel.currentPanel;
+  public get viewMode(): 'preview' | 'source' {
+    return this._viewMode;
   }
 
-  private static syncActiveContexts(): void {
-    const active = Array.from(PreviewPanel.allPanels.values()).find(panel => panel._panel.active);
-    if (active) {
-      PreviewPanel.currentPanel = active;
-    }
-
-    void vscode.commands.executeCommand('setContext', 'markdownTwin.previewActive', !!active);
-    void vscode.commands.executeCommand('setContext', 'markdownTwin.showingSource', active?._viewMode === 'source');
+  public reveal(column: vscode.ViewColumn): void {
+    this._panel.reveal(column);
   }
 
   public setViewMode(mode: 'preview' | 'source'): void {
     this._viewMode = mode;
     this._panel.webview.postMessage({ type: 'setViewMode', mode });
-    PreviewPanel.syncActiveContexts();
+    this.registry.syncActiveContexts();
     void this._update();
   }
 
-  private static async resolveEditorForDocument(
-    document: vscode.TextDocument,
-    openIfNeeded = true
-  ): Promise<vscode.TextEditor | undefined> {
-    const activeEditor = vscode.window.activeTextEditor;
-    if (activeEditor?.document.uri.toString() === document.uri.toString()) {
-      return activeEditor;
-    }
-
-    const visibleEditor = vscode.window.visibleTextEditors.find(
-      e => e.document.uri.toString() === document.uri.toString()
-    );
-    if (visibleEditor) {
-      return visibleEditor;
-    }
-
-    if (!openIfNeeded) {
-      return undefined;
-    }
-
-    try {
-      return await vscode.window.showTextDocument(document, {
-        preview: false,
-        preserveFocus: true
-      });
-    } catch {
-      return undefined;
-    }
-  }
-
-  public static async createOrShow(
-    extensionUri: vscode.Uri,
-    coordinator: TranslationCoordinator,
-    document?: vscode.TextDocument,
-    options: { avoidOpeningSource?: boolean } = {}
-  ): Promise<boolean> {
-    const editor = document
-      ? await PreviewPanel.resolveEditorForDocument(document, !options.avoidOpeningSource)
-      : vscode.window.activeTextEditor;
-    const previewDocument = document ?? editor?.document;
-    if (!previewDocument || previewDocument.languageId !== 'markdown') {
-      vscode.window.showErrorMessage(t('noActiveEditor'));
-      return false;
-    }
-
-    const code = getTargetLanguageCode();
-    const uriStr = previewDocument.uri.toString();
-    const panelKey = `${uriStr}@${code}`;
-    const column = editor?.viewColumn ?? vscode.window.tabGroups.activeTabGroup.viewColumn;
-    const targetColumn = column ? column + 1 : vscode.ViewColumn.Two;
-
-    const existing = PreviewPanel.allPanels.get(panelKey);
-    if (existing) {
-      PreviewPanel.currentPanel = existing;
-      PreviewPanel.syncActiveContexts();
-      if (!isCursor()) {
-        existing._panel.reveal(targetColumn);
-      }
-      return true;
-    }
-
-    const panel = vscode.window.createWebviewPanel(
-      PreviewPanel.viewType,
-      t('previewTitle', path.basename(previewDocument.fileName)),
-      targetColumn,
-      {
-        enableScripts: true,
-        localResourceRoots: createLocalResourceRoots(extensionUri, previewDocument),
-        retainContextWhenHidden: true
-      }
-    );
-
-    panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'flags', `${code}.svg`);
-
-    if (!PreviewPanel.highlightService) {
-      throw new Error('Preview highlighting service has not been configured');
-    }
-
-    const newPanel = new PreviewPanel(
-      panel,
-      extensionUri,
-      previewDocument,
-      editor,
-      coordinator,
-      PreviewPanel.highlightService,
-      code
-    );
-    PreviewPanel.currentPanel = newPanel;
-    PreviewPanel.allPanels.set(panelKey, newPanel);
-    PreviewPanel.syncActiveContexts();
-    return true;
-  }
-
-  private constructor(
+  public constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
     document: vscode.TextDocument,
     editor: vscode.TextEditor | undefined,
     private coordinator: TranslationCoordinator,
     private readonly highlightService: TextMateHighlightService,
-    langCode: string
+    langCode: string,
+    private readonly registry: PreviewRegistry
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -212,9 +96,9 @@ export class PreviewPanel {
 
     this._panel.onDidChangeViewState(
       () => {
-        PreviewPanel.syncActiveContexts();
+        this.registry.syncActiveContexts();
         if (!this._panel.active) return;
-        PreviewPanel.currentPanel = this;
+        this.registry.setCurrentPanel(this);
         if (this.coordinator.isActive()) {
           void this.coordinator.run(this._document);
         } else {
@@ -308,10 +192,7 @@ export class PreviewPanel {
   }
 
   private get _isSameDocAsActive(): boolean {
-    return !!(
-      PreviewPanel.currentPanel &&
-      PreviewPanel.currentPanel.editorDocumentUri.toString() === this._document.uri.toString()
-    );
+    return this.registry.isCurrentDocument(this._document.uri.toString());
   }
 
   private _setScrollLeader(leader: 'editor' | 'webview', durationMs = 220): void {
@@ -440,24 +321,12 @@ export class PreviewPanel {
     if (this._isDisposed) return;
     this._isDisposed = true;
 
-    const uriStr = this._document.uri.toString();
-    const panelKey = `${uriStr}@${this.langCode}`;
-    PreviewPanel.allPanels.delete(panelKey);
-
-    const hasRemainingPanelForDocument = Array.from(PreviewPanel.allPanels.values()).some(
-      panel => panel.editorDocumentUri.toString() === uriStr
-    );
-    if (!hasRemainingPanelForDocument) {
+    const remaining = this.registry.unregister(this);
+    if (!remaining.hasDocument) {
       this.coordinator.stopDocument(this._document.uri);
     }
 
-    if (PreviewPanel.currentPanel === this) {
-      const remaining = Array.from(PreviewPanel.allPanels.values());
-      PreviewPanel.currentPanel = remaining.length > 0 ? remaining[remaining.length - 1] : undefined;
-    }
-    PreviewPanel.syncActiveContexts();
-
-    if (PreviewPanel.allPanels.size === 0) {
+    if (!remaining.hasPanels) {
       this.coordinator.stop();
       vscode.commands.executeCommand('setContext', 'markdownTwin.previewActive', false);
       vscode.commands.executeCommand('setContext', 'markdownTwin.showingSource', false);
