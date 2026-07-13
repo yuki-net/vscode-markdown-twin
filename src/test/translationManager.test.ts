@@ -2,6 +2,15 @@ import * as vscode from 'vscode';
 import { normalizeBatchSize, TranslationManager } from '../translationManager';
 import { PreviewPanel } from '../previewPanel';
 
+const translationTargets = {
+  hasDocument: (documentUri: string) => Array.from(PreviewPanel.allPanels.values()).some(
+    panel => panel.editorDocumentUri.toString() === documentUri
+  ),
+  getTargetLanguages: (documentUri: string) => Array.from(PreviewPanel.allPanels.values())
+    .filter(panel => panel.editorDocumentUri.toString() === documentUri)
+    .map(panel => panel.langCode),
+};
+
 describe('TranslationManager', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -17,7 +26,7 @@ describe('TranslationManager', () => {
   });
 
   it('persists mode changes to the defaultMode setting', async () => {
-    const manager = new TranslationManager({} as any);
+    const manager = new TranslationManager({} as any, translationTargets);
 
     await manager.toggleMode();
 
@@ -37,7 +46,7 @@ describe('TranslationManager', () => {
   });
 
   it('can generate clean translated markdown even when the current mode is bilingual', async () => {
-    const manager = new TranslationManager({} as any);
+    const manager = new TranslationManager({} as any, translationTargets);
     const document = {
       uri: vscode.Uri.file('/workspace/requirements.md'),
       getText: () => '原文です。',
@@ -60,7 +69,7 @@ describe('TranslationManager', () => {
     const apiKeyManager = {
       getKey: jest.fn(() => Promise.resolve(undefined)),
     };
-    const manager = new TranslationManager(apiKeyManager as any);
+    const manager = new TranslationManager(apiKeyManager as any, translationTargets);
     const document = {
       uri: vscode.Uri.file('/workspace/requirements.md'),
       languageId: 'markdown',
@@ -85,7 +94,7 @@ describe('TranslationManager', () => {
     const apiKeyManager = {
       getKey: jest.fn(() => Promise.resolve('secret')),
     };
-    const manager = new TranslationManager(apiKeyManager as any);
+    const manager = new TranslationManager(apiKeyManager as any, translationTargets);
     const document = {
       uri: vscode.Uri.file('/workspace/closed.md'),
       languageId: 'markdown',
@@ -97,7 +106,7 @@ describe('TranslationManager', () => {
   });
 
   it('keeps translation sessions independent between documents', () => {
-    const manager = new TranslationManager({} as any);
+    const manager = new TranslationManager({} as any, translationTargets);
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
 
@@ -111,7 +120,7 @@ describe('TranslationManager', () => {
   });
 
   it('stops one document without deactivating another document', () => {
-    const manager = new TranslationManager({} as any);
+    const manager = new TranslationManager({} as any, translationTargets);
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
     (manager as any).activeDocumentUris.add(first.toString());

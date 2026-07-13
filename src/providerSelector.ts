@@ -13,10 +13,10 @@ import {
   getLanguageLabel,
   normalizeTargetLanguageCode,
 } from './languages';
-import { PreviewPanel } from './previewPanel';
 import { t } from './i18n';
 import { retranslateActivePreview } from './previewActions';
 import { getAzureRegion, promptAzureRegion } from './azureRegion';
+import { PreviewRegistry } from './previewRegistry';
 
 interface ProviderItem extends vscode.QuickPickItem {
   id: ProviderId;
@@ -37,7 +37,8 @@ export class ProviderSelector {
     private apiKeyManager: ApiKeyManager,
     private translationManager: TranslationManager,
     private statusBar: StatusBar,
-    private extensionUri: vscode.Uri
+    private extensionUri: vscode.Uri,
+    private previewRegistry: PreviewRegistry
   ) {}
 
   async showMenu(): Promise<void> {
@@ -211,13 +212,13 @@ export class ProviderSelector {
     await config.update('targetLanguage', selected.code, vscode.ConfigurationTarget.Global);
     await vscode.commands.executeCommand('setContext', 'markdownTwin.targetLang', selected.code);
 
-    const activePanel = PreviewPanel.getActivePanel();
+    const activePanel = this.previewRegistry.getActivePanel();
     if (activePanel) {
-      await PreviewPanel.createOrShow(this.extensionUri, this.translationManager, activePanel.editorDocument);
+      await this.previewRegistry.createOrShow(this.extensionUri, this.translationManager, activePanel.editorDocument);
     }
 
     if (this.translationManager.isActive()) {
-      await retranslateActivePreview(this.translationManager, { clearCache: true });
+      await retranslateActivePreview(this.translationManager, this.previewRegistry, { clearCache: true });
     } else {
       this.statusBar.showOffline();
     }
@@ -294,7 +295,7 @@ export class ProviderSelector {
     await config.update('provider', selected.id, vscode.ConfigurationTarget.Global);
 
     if (this.translationManager.isActive()) {
-      await retranslateActivePreview(this.translationManager, {
+      await retranslateActivePreview(this.translationManager, this.previewRegistry, {
         clearAllCache: true,
         overrideProvider: selected.id,
       });

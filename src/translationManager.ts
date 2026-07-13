@@ -13,11 +13,11 @@ import { StatusBar } from './statusBar';
 import { shouldTranslate, splitTranslatableParts, joinTranslatedParts, EXCLUDED_TOKEN_TYPES } from './languageDetector';
 import { resolveSourceLanguageCode } from './languages';
 import { t } from './i18n';
-import { PreviewPanel } from './previewPanel';
 import { buildTranslatedMarkdown, type TranslatedMarkdownResult, type TranslationViewMode } from './translatedMarkdownBuilder';
 import { createTranslationProvider } from './providers/providerFactory';
 import { TranslationCache } from './translationCache';
 import { DocumentTranslationSession, type TranslationRun } from './application/documentTranslationSession';
+import type { TranslationTargetRegistry } from './ports/translationTargetRegistry';
 
 export class TranslationManager implements vscode.Disposable {
   private cache = new TranslationCache();
@@ -32,7 +32,10 @@ export class TranslationManager implements vscode.Disposable {
   private onTranslationUpdatedEmitter = new vscode.EventEmitter<vscode.Uri | undefined>();
   readonly onTranslationUpdated = this.onTranslationUpdatedEmitter.event;
 
-  constructor(private apiKeyManager: ApiKeyManager) {
+  constructor(
+    private apiKeyManager: ApiKeyManager,
+    private translationTargets: TranslationTargetRegistry
+  ) {
     const config = vscode.workspace.getConfiguration('markdownTwin');
     const rawMode = config.get<string>('defaultMode') ?? 'Translation Only';
     this.currentMode = rawMode === 'Bilingual' ? 'bilingual' : 'translation-only';
@@ -122,10 +125,8 @@ export class TranslationManager implements vscode.Disposable {
     }
 
     const docUriStr = document.uri.toString();
-    const panelsForDoc = Array.from(PreviewPanel.allPanels.values()).filter(
-      p => p.editorDocumentUri.toString() === docUriStr
-    );
-    if (panelsForDoc.length === 0) {
+    const targetLangs = [...this.translationTargets.getTargetLanguages(docUriStr)];
+    if (targetLangs.length === 0) {
       this.logWarning(`Skip translation without an open Twin panel: ${docUriStr}`);
       this.stopDocumentTranslation(document.uri);
       return false;
@@ -143,7 +144,6 @@ export class TranslationManager implements vscode.Disposable {
     this.currentSourceLang = sourceLang;
     const batchSize = normalizeBatchSize(config.get<number>('batchSize'));
 
-    const targetLangs = panelsForDoc.map(p => p.langCode);
     this.logInfo(
       `Start translation: provider=${providerId}, source=${sourceLang}, targets=${targetLangs.join(',')}, uri=${document.uri.toString()}`
     );
@@ -405,10 +405,7 @@ export class TranslationManager implements vscode.Disposable {
   }
 
   private hasOpenPanelForDocument(uri: vscode.Uri): boolean {
-    const uriStr = uri.toString();
-    return Array.from(PreviewPanel.allPanels.values()).some(
-      panel => panel.editorDocumentUri.toString() === uriStr
-    );
+    return this.translationTargets.hasDocument(uri.toString());
   }
 
   generateTranslatedMarkdown(

@@ -17,6 +17,7 @@ import { retranslateActivePreview, retranslatePreviewDocument } from './previewA
 import { runTranslationForDocument } from './translationRunner';
 import { promptAzureRegion } from './azureRegion';
 import { TextMateHighlightService } from './preview/highlighting/textMateHighlightService';
+import { PreviewRegistry } from './previewRegistry';
 
 let translationManager: TranslationManager;
 
@@ -28,6 +29,7 @@ interface ExtensionServices {
   translationManager: TranslationManager;
   statusBar: StatusBar;
   providerSelector: ProviderSelector;
+  previewRegistry: PreviewRegistry;
 }
 
 interface TranslationDocumentResolution {
@@ -53,7 +55,7 @@ function syncTargetLangContext(): void {
   void vscode.commands.executeCommand('setContext', 'markdownTwin.targetLang', code);
 }
 
-async function resolveTranslationDocument(): Promise<TranslationDocumentResolution | undefined> {
+async function resolveTranslationDocument(previewRegistry: PreviewRegistry): Promise<TranslationDocumentResolution | undefined> {
   const nativePreviewUri = getNativeMarkdownPreviewDocumentUri();
   if (nativePreviewUri) {
     try {
@@ -84,7 +86,7 @@ async function resolveTranslationDocument(): Promise<TranslationDocumentResoluti
     return { document: activeEditor.document, avoidOpeningSource: false };
   }
 
-  const panelDoc = PreviewPanel.getActivePanel()?.editorDocument;
+  const panelDoc = previewRegistry.getActivePanel()?.editorDocument;
   if (panelDoc?.languageId === 'markdown') {
     return { document: panelDoc, avoidOpeningSource: false };
   }
@@ -131,7 +133,8 @@ export async function activate(context: vscode.ExtensionContext) {
   await migrateLegacySettings();
 
   const apiKeyManager = new ApiKeyManager(context.secrets);
-  translationManager = new TranslationManager(apiKeyManager);
+  const previewRegistry = new PreviewRegistry();
+  translationManager = new TranslationManager(apiKeyManager, previewRegistry);
   context.subscriptions.push(translationManager);
 
   const statusBar = new StatusBar();
@@ -140,11 +143,24 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBar);
 
   const highlightService = new TextMateHighlightService();
-  PreviewPanel.configureHighlightService(highlightService);
+  previewRegistry.configureHighlightService(highlightService);
   context.subscriptions.push(highlightService);
 
-  const providerSelector = new ProviderSelector(apiKeyManager, translationManager, statusBar, context.extensionUri);
-  const services: ExtensionServices = { context, apiKeyManager, translationManager, statusBar, providerSelector };
+  const providerSelector = new ProviderSelector(
+    apiKeyManager,
+    translationManager,
+    statusBar,
+    context.extensionUri,
+    previewRegistry
+  );
+  const services: ExtensionServices = {
+    context,
+    apiKeyManager,
+    translationManager,
+    statusBar,
+    providerSelector,
+    previewRegistry,
+  };
 
   syncTargetLangContext();
   void vscode.commands.executeCommand('setContext', 'markdownTwin.previewActive', false);
@@ -156,14 +172,14 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function createToggleTranslationHandler(services: ExtensionServices): ToggleTranslationHandler {
-  const { context, translationManager, providerSelector } = services;
+  const { context, translationManager, providerSelector, previewRegistry } = services;
 
   return async (requestedLangCode?: string) => {
     if (requestedLangCode) {
       await applyTargetLanguageByCode(requestedLangCode);
     }
 
-    const resolution = await resolveTranslationDocument();
+    const resolution = await resolveTranslationDocument(previewRegistry);
     if (!resolution) {
       vscode.window.showWarningMessage(t('noActiveEditor'));
       return;
@@ -174,12 +190,11 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
     const canCreatePanelFromActiveEditor = !!activeEditor && activeEditor.document.uri.toString() === document.uri.toString();
     const config = vscode.workspace.getConfiguration('markdownTwin');
     const code = getTargetLanguageCode();
-    const targetKey = `${document.uri.toString()}@${code}`;
-
-    if (PreviewPanel.allPanels.has(targetKey)) {
+    if (previewRegistry.getPanel(document.uri, code)) {
       await retranslatePreviewDocument({
         extensionUri: context.extensionUri,
         translationManager,
+        previewRegistry,
         document,
         options: {
           revealPreview: !isCursor() && canCreatePanelFromActiveEditor,
@@ -200,7 +215,7 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
 
     const providerId = normalizeProviderId(provider);
 
-    const panelReady = await PreviewPanel.createOrShow(context.extensionUri, translationManager, document, {
+    const panelReady = await previewRegistry.createOrShow(context.extensionUri, translationManager, document, {
       avoidOpeningSource,
     });
     if (!panelReady) return;
@@ -210,19 +225,19 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
 }
 
 function registerConfigurationSync(services: ExtensionServices): void {
-  const { context, translationManager, statusBar } = services;
+  const { context, translationManager, statusBar, previewRegistry } = services;
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async e => {
       if (e.affectsConfiguration('markdownTwin.targetLanguage')) {
         syncTargetLangContext();
-        const activePanel = PreviewPanel.getActivePanel();
+        const activePanel = previewRegistry.getActivePanel();
         if (activePanel) {
-          await PreviewPanel.createOrShow(context.extensionUri, translationManager, activePanel.editorDocument);
+          await previewRegistry.createOrShow(context.extensionUri, translationManager, activePanel.editorDocument);
         }
 
         if (translationManager.isActive()) {
-          await retranslateActivePreview(translationManager, { clearCache: true });
+          await retranslateActivePreview(translationManager, previewRegistry, { clearCache: true });
         } else {
           statusBar.showOffline();
         }
@@ -232,7 +247,7 @@ function registerConfigurationSync(services: ExtensionServices): void {
         translationManager.clearAllCache();
 
         if (translationManager.isActive()) {
-          await retranslateActivePreview(translationManager);
+          await retranslateActivePreview(translationManager, previewRegistry);
         } else {
           statusBar.showOffline();
         }
@@ -246,7 +261,7 @@ function registerConfigurationSync(services: ExtensionServices): void {
 }
 
 function registerCommands(services: ExtensionServices, toggleHandler: ToggleTranslationHandler): void {
-  const { context, translationManager, providerSelector } = services;
+  const { context, translationManager, providerSelector, previewRegistry } = services;
 
   registerCommand(context, 'markdownTwin.toggleTranslation', toggleHandler);
 
@@ -275,7 +290,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
   });
 
   registerCommand(context, 'markdownTwin.copyTranslatedMarkdown', async () => {
-    const activePanel = PreviewPanel.getActivePanel();
+    const activePanel = previewRegistry.getActivePanel();
     if (!activePanel) return;
     try {
       const translated = translationManager.generateTranslatedMarkdown(
@@ -291,7 +306,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
   });
 
   registerCommand(context, 'markdownTwin.exportTranslatedMarkdown', async () => {
-    const activePanel = PreviewPanel.getActivePanel();
+    const activePanel = previewRegistry.getActivePanel();
     if (!activePanel) return;
     try {
       const translated = translationManager.generateTranslatedMarkdown(
@@ -310,11 +325,11 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
   });
 
   registerCommand(context, 'markdownTwin.openTranslatedSource', () => {
-    PreviewPanel.getActivePanel()?.setViewMode('source');
+    previewRegistry.getActivePanel()?.setViewMode('source');
   });
 
   registerCommand(context, 'markdownTwin.openPreviewFromSource', () => {
-    PreviewPanel.getActivePanel()?.setViewMode('preview');
+    previewRegistry.getActivePanel()?.setViewMode('preview');
   });
 
   registerCommand(context, 'markdownTwin.copyFromPreviewContext', async () => {
@@ -322,30 +337,29 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
   });
 
   registerCommand(context, 'markdownTwin.retranslateFromPreviewContext', async () => {
-    await retranslateActivePreview(translationManager, { clearCache: true });
+    await retranslateActivePreview(translationManager, previewRegistry, { clearCache: true });
   });
 }
 
 function registerEditorDocumentListeners(services: ExtensionServices): void {
-  const { context, translationManager } = services;
+  const { context, translationManager, previewRegistry } = services;
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(async editor => {
       if (!editor || editor.document.languageId !== 'markdown') return;
 
       const uriStr = editor.document.uri.toString();
-      const panelsForDoc = Array.from(PreviewPanel.allPanels.values()).filter(
-        p => p.editorDocumentUri.toString() === uriStr
-      );
+      const panelsForDoc = previewRegistry.findForDocument(uriStr);
 
       if (panelsForDoc.length === 0) return;
 
       const code = getTargetLanguageCode();
-      PreviewPanel.currentPanel = panelsForDoc.find(p => p.langCode === code) ?? panelsForDoc[0];
+      previewRegistry.setCurrentPanel(panelsForDoc.find(p => p.langCode === code) ?? panelsForDoc[0]);
 
       if (translationManager.isActive()) {
         await retranslatePreviewDocument({
           translationManager,
+          previewRegistry,
           document: editor.document,
         });
       }
@@ -361,10 +375,7 @@ function registerEditorDocumentListeners(services: ExtensionServices): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidCloseTextDocument(doc => {
-      const hasPreviewPanel = Array.from(PreviewPanel.allPanels.values()).some(
-        panel => panel.editorDocumentUri.toString() === doc.uri.toString()
-      );
-      if (hasPreviewPanel) return;
+      if (previewRegistry.hasDocument(doc.uri.toString())) return;
       translationManager.closeDocument(doc.uri);
     })
   );
