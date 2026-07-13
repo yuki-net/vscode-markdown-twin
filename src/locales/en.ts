@@ -48,6 +48,9 @@ export const en: TranslationType = {
   exportedSuccessfully: (filename: string) => `Successfully exported to ${filename}`,
 
   translatingTooltip: (done: number, total: number) => `Translating... ${done}/${total} | Click to open menu`,
+  translatingMultipleText: (files: number, percent: number) => `Twin: ${files} files ${percent}%`,
+  translatingMultipleTooltip: (done: number, total: number) => `Translating multiple files... ${done}/${total}`,
+  translatingFileTooltip: (file: string, provider: string, targets: string, percent: number, done: number, total: number) => `${file}: ${percent}% (${done}/${total}) | ${provider} | ${targets}`,
   statusCompleteTooltip: (mode: string, provider: string, target: string) => `Markdown Twin: ${mode} | ${provider} | ${target} | Click to open menu`,
   statusOfflineTooltip: (provider: string) => `Markdown Twin: Ready | ${provider} | Click to open menu`,
   statusErrorText: (provider: string) => `Twin: Error (${provider})`,

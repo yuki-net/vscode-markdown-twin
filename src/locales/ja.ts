@@ -48,6 +48,9 @@ export const ja: TranslationType = {
   exportedSuccessfully: (filename: string) => `${filename} に正常にエクスポートしました`,
 
   translatingTooltip: (done: number, total: number) => `翻訳中... ${done}/${total} | クリックでメニューを開く`,
+  translatingMultipleText: (files: number, percent: number) => `Twin: ${files}ファイル ${percent}%`,
+  translatingMultipleTooltip: (done: number, total: number) => `複数ファイルを翻訳中... ${done}/${total}`,
+  translatingFileTooltip: (file: string, provider: string, targets: string, percent: number, done: number, total: number) => `${file}: ${percent}% (${done}/${total}) | ${provider} | ${targets}`,
   statusCompleteTooltip: (mode: string, provider: string, target: string) => `Markdown Twin: ${mode} | ${provider} | ${target} | クリックでメニューを開く`,
   statusOfflineTooltip: (provider: string) => `Markdown Twin: 待機中 | ${provider} | クリックでメニューを開く`,
   statusErrorText: (provider: string) => `Twin: エラー (${provider})`,

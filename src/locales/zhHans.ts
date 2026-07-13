@@ -48,6 +48,9 @@ export const zhHans: TranslationType = {
   exportedSuccessfully: (filename: string) => `已成功导出到 ${filename}`,
 
   translatingTooltip: (done: number, total: number) => `正在翻译... ${done}/${total} | 点击打开菜单`,
+  translatingMultipleText: (files: number, percent: number) => `Twin: ${files} 个文件 ${percent}%`,
+  translatingMultipleTooltip: (done: number, total: number) => `正在翻译多个文件... ${done}/${total}`,
+  translatingFileTooltip: (file: string, provider: string, targets: string, percent: number, done: number, total: number) => `${file}: ${percent}% (${done}/${total}) | ${provider} | ${targets}`,
   statusCompleteTooltip: (mode: string, provider: string, target: string) => `Markdown Twin: ${mode} | ${provider} | ${target} | 点击打开菜单`,
   statusOfflineTooltip: (provider: string) => `Markdown Twin: 就绪 | ${provider} | 点击打开菜单`,
   statusErrorText: (provider: string) => `Twin: 错误（${provider}）`,

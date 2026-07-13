@@ -3,9 +3,27 @@ import { getLanguageDisplayCode, normalizeTargetLanguageCode } from './languages
 import { PROVIDER_DISPLAY_NAMES, normalizeProviderId } from './providers/ITranslationProvider';
 import { t } from './i18n';
 
+type TranslationMode = 'translation-only' | 'bilingual';
+
+interface DocumentProgress {
+  uri: vscode.Uri;
+  label: string;
+  providerName: string;
+  done: number;
+  total: number;
+}
+
+interface CompletedDocument {
+  uri: vscode.Uri;
+  mode: TranslationMode;
+  providerName: string;
+}
+
 export class StatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
   private activeProviderId: string | null = null;
+  private readonly progressByDocument = new Map<string, DocumentProgress>();
+  private lastCompleted: CompletedDocument | undefined;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(
@@ -30,22 +48,47 @@ export class StatusBar implements vscode.Disposable {
     return PROVIDER_DISPLAY_NAMES[id];
   }
 
-  showProgress(done: number, total: number): void {
-    const config = vscode.workspace.getConfiguration('markdownTwin');
-    const targetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
-    const targetCode = getLanguageDisplayCode(targetLang);
-    const providerName = this.resolveProviderName();
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    this.item.text = `$(sync~spin) Twin ${providerName} ${pct}% (${targetCode})`;
-    this.item.tooltip = t('translatingTooltip', done, total);
-    this.item.show();
+  showProgress(
+    documentUri: vscode.Uri,
+    providerName: string,
+    done: number,
+    total: number
+  ): void {
+    const uriStr = documentUri.toString();
+    this.progressByDocument.set(uriStr, {
+      uri: documentUri,
+      label: this.documentLabel(documentUri),
+      providerName,
+      done,
+      total,
+    });
+    if (this.lastCompleted?.uri.toString() === uriStr) {
+      this.lastCompleted = undefined;
+    }
+    this.renderProgress();
   }
 
-  showComplete(mode: 'translation-only' | 'bilingual'): void {
-    const config = vscode.workspace.getConfiguration('markdownTwin');
-    const targetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
-    const targetCode = getLanguageDisplayCode(targetLang);
-    const providerName = this.resolveProviderName();
+  showComplete(
+    documentUri: vscode.Uri,
+    mode: TranslationMode,
+    providerName: string
+  ): void {
+    this.progressByDocument.delete(documentUri.toString());
+    this.lastCompleted = {
+      uri: documentUri,
+      mode,
+      providerName,
+    };
+    if (this.progressByDocument.size > 0) {
+      this.renderProgress();
+      return;
+    }
+    this.renderComplete(this.lastCompleted);
+  }
+
+  private renderComplete(completed: CompletedDocument): void {
+    const { mode, providerName } = completed;
+    const targetCode = this.selectedTargetCode();
     const icon = mode === 'bilingual' ? '$(split-horizontal)' : '$(globe)';
     this.item.text = `${icon} Twin ${providerName} (${targetCode})`;
 
@@ -55,24 +98,93 @@ export class StatusBar implements vscode.Disposable {
   }
 
   showOffline(): void {
-    const config = vscode.workspace.getConfiguration('markdownTwin');
-    const targetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
-    const targetCode = getLanguageDisplayCode(targetLang);
+    this.progressByDocument.clear();
+    this.lastCompleted = undefined;
+    const targetCode = this.selectedTargetCode();
     const providerName = this.resolveProviderName();
     this.item.text = `$(globe) Twin: ${providerName} (${targetCode})`;
     this.item.tooltip = t('statusOfflineTooltip', providerName);
     this.item.show();
   }
 
-  update(mode: 'translation-only' | 'bilingual'): void {
-    this.showComplete(mode);
+  update(mode: TranslationMode): void {
+    if (!this.lastCompleted || this.progressByDocument.size > 0) return;
+    this.lastCompleted.mode = mode;
+    this.renderComplete(this.lastCompleted);
   }
 
-  showError(): void {
+  showError(documentUri?: vscode.Uri): void {
+    if (documentUri) {
+      this.progressByDocument.delete(documentUri.toString());
+      if (this.progressByDocument.size > 0) {
+        this.renderProgress();
+        return;
+      }
+    }
     const providerName = this.resolveProviderName();
     this.item.text = t('statusErrorText', providerName);
     this.item.tooltip = t('statusErrorTooltip');
     this.item.show();
+  }
+
+  removeDocument(documentUri: vscode.Uri): void {
+    const uriStr = documentUri.toString();
+    this.progressByDocument.delete(uriStr);
+    if (this.lastCompleted?.uri.toString() === uriStr) {
+      this.lastCompleted = undefined;
+    }
+    if (this.progressByDocument.size > 0) {
+      this.renderProgress();
+    }
+  }
+
+  private renderProgress(): void {
+    const entries = Array.from(this.progressByDocument.values());
+    if (entries.length === 0) return;
+    const targetCode = this.selectedTargetCode();
+
+    if (entries.length === 1) {
+      const entry = entries[0];
+      const pct = this.percentage(entry.done, entry.total);
+      this.item.text = `$(sync~spin) Twin ${entry.providerName} ${pct}% (${targetCode})`;
+      this.item.tooltip = t('translatingTooltip', entry.done, entry.total);
+      this.item.show();
+      return;
+    }
+
+    const done = entries.reduce((sum, entry) => sum + entry.done, 0);
+    const total = entries.reduce((sum, entry) => sum + entry.total, 0);
+    const pct = this.percentage(done, total);
+    this.item.text = `$(sync~spin) ${t('translatingMultipleText', entries.length, pct)}`;
+    this.item.tooltip = [
+      t('translatingMultipleTooltip', done, total),
+      ...entries.map(entry => t(
+        'translatingFileTooltip',
+        entry.label,
+        entry.providerName,
+        targetCode,
+        this.percentage(entry.done, entry.total),
+        entry.done,
+        entry.total
+      )),
+    ].join('\n');
+    this.item.show();
+  }
+
+  private percentage(done: number, total: number): number {
+    return total > 0 ? Math.round((done / total) * 100) : 0;
+  }
+
+  private selectedTargetCode(): string {
+    const config = vscode.workspace.getConfiguration('markdownTwin');
+    const targetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
+    return getLanguageDisplayCode(targetLang);
+  }
+
+  private documentLabel(uri: vscode.Uri): string {
+    const path = uri.path || uri.fsPath || uri.toString();
+    const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return slash >= 0 ? path.slice(slash + 1) : path;
   }
 
   hide(): void {
@@ -80,6 +192,7 @@ export class StatusBar implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.progressByDocument.clear();
     this.item.dispose();
   }
 }

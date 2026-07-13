@@ -134,6 +134,7 @@ export class TranslationManager implements vscode.Disposable {
 
     const config = vscode.workspace.getConfiguration('markdownTwin');
     const providerId = normalizeProviderId(overrideProvider ?? config.get<string>('provider'));
+    const providerName = PROVIDER_DISPLAY_NAMES[providerId] ?? providerId;
     this.statusBar?.setActiveProvider(providerId);
 
     const sourceLang = resolveSourceLanguageCode(config.get<string>('sourceLanguage') ?? 'auto');
@@ -148,16 +149,15 @@ export class TranslationManager implements vscode.Disposable {
     if (providerRequiresApiKey(providerId)) {
       const key = await this.apiKeyManager.getKey(providerId);
       if (!key) {
-        const displayName = PROVIDER_DISPLAY_NAMES[providerId] ?? providerId;
-        this.logError(t('apiKeyNotSetForProvider', displayName), undefined, false);
-        this.statusBar?.showError();
+        this.logError(t('apiKeyNotSetForProvider', providerName), undefined, false);
+        this.statusBar?.showError(document.uri);
         return this.failStartTranslation(document.uri, sessionId);
       }
     }
 
     const provider = await createTranslationProvider(providerId, this.apiKeyManager);
     if (!provider) {
-      this.statusBar?.showError();
+      this.statusBar?.showError(document.uri);
       return this.failStartTranslation(document.uri, sessionId);
     }
     if (!this.isCurrentDocumentSession(document.uri, sessionId)) {
@@ -175,7 +175,7 @@ export class TranslationManager implements vscode.Disposable {
 
     if (totalCount === 0) {
       this.logWarning(`No pending translations for ${document.uri.toString()}`);
-      this.statusBar?.showComplete(this.currentMode);
+      this.statusBar?.showComplete(document.uri, this.currentMode, providerName);
       this.onTranslationUpdatedEmitter.fire(document.uri);
       return true;
     }
@@ -183,7 +183,7 @@ export class TranslationManager implements vscode.Disposable {
     return this.executeTranslationLoop(
       sessionId,
       provider,
-      PROVIDER_DISPLAY_NAMES[providerId] ?? providerId,
+      providerName,
       document.uri,
       sourceLang,
       targetLangs,
@@ -235,7 +235,7 @@ export class TranslationManager implements vscode.Disposable {
   ): Promise<boolean> {
     let accumulatedDone = 0;
     let fatalError = false;
-    this.statusBar?.showProgress(accumulatedDone, totalCount);
+    this.statusBar?.showProgress(documentUri, providerName, accumulatedDone, totalCount);
     this.onTranslationUpdatedEmitter.fire(documentUri);
 
     for (const targetLang of targetLangs) {
@@ -262,7 +262,7 @@ export class TranslationManager implements vscode.Disposable {
             const timestamp = new Date().toLocaleTimeString();
             this.outputChannel.appendLine(`[${timestamp}] [ERROR] ${err.message}`);
             fatalError = true;
-            this.statusBar?.showError();
+            this.statusBar?.showError(documentUri);
             const action = await vscode.window.showErrorMessage(
               t('azureRegionError', err.region ?? 'unknown'),
               t('openSettings')
@@ -272,7 +272,7 @@ export class TranslationManager implements vscode.Disposable {
             }
           } else if (err instanceof TooManyRequestsError) {
             this.logWarning(t('rateLimitReached'));
-            this.statusBar?.showError();
+            this.statusBar?.showError(documentUri);
             for (const text of batch) {
               docCache.set(text, text);
             }
@@ -287,12 +287,12 @@ export class TranslationManager implements vscode.Disposable {
         if (fatalError || !this.isCurrentDocumentSession(documentUri, sessionId)) break;
 
         accumulatedDone += batch.length;
-        this.statusBar?.showProgress(accumulatedDone, totalCount);
+        this.statusBar?.showProgress(documentUri, providerName, accumulatedDone, totalCount);
         this.onTranslationUpdatedEmitter.fire(documentUri);
       }
     }
     if (!fatalError && this.isDocumentActive(documentUri) && this.isCurrentDocumentSession(documentUri, sessionId)) {
-      this.statusBar?.showComplete(this.currentMode);
+      this.statusBar?.showComplete(documentUri, this.currentMode, providerName);
       return true;
     }
 
@@ -339,6 +339,7 @@ export class TranslationManager implements vscode.Disposable {
 
     this.activeDocumentUris.delete(uriStr);
     this.translationSessionIds.set(uriStr, (this.translationSessionIds.get(uriStr) ?? 0) + 1);
+    this.statusBar?.removeDocument(uri);
 
     const count = this.cache.releaseDocument(uri);
 

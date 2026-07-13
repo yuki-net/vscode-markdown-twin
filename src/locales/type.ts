@@ -50,6 +50,9 @@ export interface TranslationType {
 
   // Status Bar
   translatingTooltip: (done: number, total: number) => string;
+  translatingMultipleText: (files: number, percent: number) => string;
+  translatingMultipleTooltip: (done: number, total: number) => string;
+  translatingFileTooltip: (file: string, provider: string, targets: string, percent: number, done: number, total: number) => string;
   statusCompleteTooltip: (mode: string, provider: string, target: string) => string;
   statusOfflineTooltip: (provider: string) => string;
   statusErrorText: (provider: string) => string;

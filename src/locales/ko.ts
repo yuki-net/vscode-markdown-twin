@@ -48,6 +48,9 @@ export const ko: TranslationType = {
   exportedSuccessfully: (filename: string) => `${filename} 내보내기에 성공했습니다`,
 
   translatingTooltip: (done: number, total: number) => `번역 중... ${done}/${total} | 클릭하여 메뉴 열기`,
+  translatingMultipleText: (files: number, percent: number) => `Twin: ${files}개 파일 ${percent}%`,
+  translatingMultipleTooltip: (done: number, total: number) => `여러 파일 번역 중... ${done}/${total}`,
+  translatingFileTooltip: (file: string, provider: string, targets: string, percent: number, done: number, total: number) => `${file}: ${percent}% (${done}/${total}) | ${provider} | ${targets}`,
   statusCompleteTooltip: (mode: string, provider: string, target: string) => `Markdown Twin: ${mode} | ${provider} | ${target} | 클릭하여 메뉴 열기`,
   statusOfflineTooltip: (provider: string) => `Markdown Twin: 준비됨 | ${provider} | 클릭하여 메뉴 열기`,
   statusErrorText: (provider: string) => `Twin: 오류 (${provider})`,
