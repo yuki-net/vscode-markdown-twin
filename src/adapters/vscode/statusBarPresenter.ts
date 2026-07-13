@@ -102,7 +102,7 @@ export class StatusBarPresenter implements vscode.Disposable {
 
   private renderComplete(completed: CompletedDocument): void {
     const { mode, providerName } = completed;
-    const targetCode = this.targetCodes(completed.targetLanguages);
+    const targetCode = this.selectedTargetCode();
     const icon = mode === 'bilingual' ? '$(split-horizontal)' : '$(globe)';
     this.item.text = `${icon} Twin ${providerName} (${targetCode})`;
 
@@ -177,7 +177,7 @@ export class StatusBarPresenter implements vscode.Disposable {
   private renderProgress(entries: DocumentProgress[]): void {
     if (entries.length === 1) {
       const entry = entries[0];
-      const targetCode = this.targetCodes(entry.targetLanguages);
+      const targetCode = this.selectedTargetCode();
       const pct = this.percentage(entry.done, entry.total);
       this.item.text = `$(sync~spin) Twin ${entry.providerName} ${pct}% (${targetCode})`;
       this.item.tooltip = t('translatingTooltip', entry.done, entry.total);

@@ -44,10 +44,21 @@ describe('StatusBarPresenter', () => {
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const document = vscode.Uri.file('/workspace/document.md');
 
-    statusBar.showProgress(document, 'Google Cloud', 1, 4);
+    statusBar.showProgress(document, 'Google Cloud', 1, 4, ['ja', 'en', 'ko']);
 
     expect(item.text).toContain('(KO)');
     expect(item.text).not.toMatch(/JA|RU|US/);
+  });
+
+  it('shows only the selected language after completing multiple preview languages', () => {
+    const statusBar = new StatusBarPresenter(settings as any);
+    const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
+    const document = vscode.Uri.file('/workspace/document.md');
+
+    statusBar.showComplete(document, 'translation-only', 'Google Cloud', ['ja', 'en', 'ko']);
+
+    expect(item.text).toContain('(KO)');
+    expect(item.text).not.toMatch(/JA|US/);
   });
 
   it('renders the remaining completed document after an in-progress document is removed', () => {
