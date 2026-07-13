@@ -1,4 +1,4 @@
-import { mapDeepLSourceLanguageCode, mapDeepLTargetLanguageCode, mapLanguageCodeForProvider } from '../providers/languageCodeMapper';
+import { mapDeepLSourceLanguageCode, mapDeepLTargetLanguageCode, mapLanguageCodeForProvider } from '../adapters/providers/languageCodeMapper';
 
 describe('languageCodeMapper', () => {
   it('keeps app language codes unchanged for Azure when supported directly', () => {

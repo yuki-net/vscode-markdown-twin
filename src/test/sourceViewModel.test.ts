@@ -1,4 +1,4 @@
-import { buildSourceViewModel } from '../preview/sourceViewModel';
+import { buildSourceViewModel } from '../adapters/vscode/preview/sourceViewModel';
 
 describe('buildSourceViewModel', () => {
   it('uses the shared TextMate service for translated Markdown source', async () => {

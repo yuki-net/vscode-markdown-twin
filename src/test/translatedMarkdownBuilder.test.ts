@@ -1,6 +1,6 @@
 import MarkdownIt from 'markdown-it';
-import { buildTranslatedMarkdown } from '../translatedMarkdownBuilder';
-import { createMarkdownPreviewEngine } from '../preview/markdownEngine';
+import { buildTranslatedMarkdown } from '../domain/markdown/translatedMarkdownBuilder';
+import { createMarkdownPreviewEngine } from '../adapters/vscode/preview/markdownEngine';
 
 describe('buildTranslatedMarkdown', () => {
   it('keeps markdown table structure when translating cell contents', () => {

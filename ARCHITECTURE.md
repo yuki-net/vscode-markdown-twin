@@ -9,31 +9,45 @@ Markdown Twin は、軽量なヘキサゴナルアーキテクチャと一方向
 VS Code Commands / Events
           |
           v
-TranslationCoordinator
+VS Code TranslationCoordinator
           |
           v
-TranslationManager + DocumentTranslationSession
+Application TranslationCoordinator
           |
-          +--> Domain (TranslationSpec / Markdown変換)
-          +--> Ports  (Settings / Status / Preview targets)
-          +--> TranslationProvider
+          +--> TranslationExecutor + DocumentTranslationSession
+          +--> TranslationStore + TranslationCache Port
+          +--> Domain (TranslationSpec / TranslationStatus / Markdown変換)
+          +--> Ports  (Settings / Status / Diagnostics / Preview targets / Provider)
 
 Adapters --> Ports
 ```
 
 内側のモジュールから具体的なUI実装を参照してはならない。
 
+- Domain、Ports、Applicationは`vscode`パッケージを参照しない。
 - 翻訳実行コードは `PreviewPanel` を参照しない。
 - `PreviewPanel` と `ProviderSelector` は翻訳状態を直接変更せず、`TranslationCoordinator`を呼ぶ。
 - VS Code設定は `TranslationSettingsRepository` を通じて読み書きする。
-- 翻訳APIは `ITranslationProvider` を実装し、VS Code UIを参照しない。
+- 翻訳APIは `TranslationProvider` Portを実装し、VS Code UIを参照しない。
 - Markdown変換コアは `vscode` パッケージを参照しない。
 
 ## 主要コンポーネント
 
-### TranslationCoordinator
+### VS Code TranslationCoordinator
 
-翻訳操作のアプリケーション向け窓口。キャッシュ無効化、単一文書の実行、全プレビュー文書の再実行、UI向け状態イベントを調整する。
+VS Codeの`TextDocument`と`Uri`を内側の`TranslationDocument`と文書IDへ変換するアダプター。キャッシュ無効化、単一文書の実行、全プレビュー文書の再実行、デバウンス、Context keyを調整する。
+
+### Application TranslationCoordinator
+
+VS Code APIに依存しない翻訳ユースケース。翻訳条件、文書状態、キャッシュと実行結果を調整し、外部機能にはPortを通じてアクセスする。旧`TranslationManager`は廃止済み。
+
+### TranslationExecutor
+
+Providerのバッチ呼び出し、返却件数検証、世代確認後のコミットを担当する。古い実行、キャンセル済み実行、件数不一致の結果はコミットしない。
+
+### TranslationStore
+
+文書ごとの`enabled`状態と`idle / running / completed / failed / cancelled`実行状態を分離して保持する。
 
 ### DocumentTranslationSession
 
@@ -45,7 +59,7 @@ Adapters --> Ports
 
 ### PreviewRegistry
 
-Previewパネルの生成、検索、アクティブ選択、破棄を所有する。`PreviewPanel`自身はWebview表示、メッセージ処理、スクロール同期に集中する。
+Previewパネルの生成、検索、アクティブ選択、破棄を所有する。`PreviewController`がVS Codeイベントを一度だけ購読し、`PreviewPanel`自身はWebview表示、メッセージ処理、スクロール同期に集中する。
 
 ### ProviderRegistry
 
@@ -55,8 +69,10 @@ Previewパネルの生成、検索、アクティブ選択、破棄を所有す�
 
 ```text
 Command / Configuration Event
-  -> TranslationCoordinator
+  -> VS Code TranslationCoordinator
+  -> Application TranslationCoordinator
   -> DocumentTranslationSession.begin()
+  -> TranslationExecutor
   -> Markdownから翻訳単位を抽出
   -> TranslationProvider.translate(..., AbortSignal)
   -> セッション世代を確認
@@ -73,13 +89,16 @@ Command / Configuration Event
 4. グローバル設定変更は、開いている全対象ドキュメントへ反映する。
 5. キャッシュは翻訳条件が異なる結果を共有しない。
 6. Previewの一覧とアクティブ状態は`PreviewRegistry`だけが所有する。
+7. Providerレスポンス数が入力数と一致しない場合、結果をコミットしない。
+8. VS Code設定へ直接アクセスするのは`VscodeTranslationSettingsRepository`だけとする。
 
 ## 変更時の配置指針
 
 - Markdownの解析・生成規則: ドメイン側の純粋なモジュール
-- 翻訳の開始、取消、再試行、全体調整: `application/`
+- 翻訳の実行、状態、取消、コミット: `application/`
+- VS Code文書とコマンドの調整: VS Codeアダプター
 - 外部実装へ要求する契約: `ports/`
 - VS Code API、Webview、設定、SecretStorage: VS Codeアダプター
-- 翻訳サービス固有のHTTP処理: `providers/`
+- 翻訳サービス固有のHTTP処理: `adapters/providers/`
 
 境界を越えて便利な静的状態を追加せず、必要な依存はコンストラクターで注入する。

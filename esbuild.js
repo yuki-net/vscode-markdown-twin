@@ -5,7 +5,7 @@ fs.rmSync('dist/extension.js.LEGAL.txt', { force: true });
 
 async function build() {
   await esbuild.build({
-    entryPoints: ['src/extension.ts'],
+    entryPoints: ['src/extension/activate.ts'],
     bundle: true,
     outfile: 'dist/extension.js',
     external: ['vscode', 'vscode-oniguruma/release/onig.wasm'],

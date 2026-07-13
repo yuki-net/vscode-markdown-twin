@@ -1,14 +1,17 @@
 import * as vscode from 'vscode';
-import { StatusBar } from '../statusBar';
+import { StatusBarPresenter } from '../adapters/vscode/statusBarPresenter';
 
-describe('StatusBar', () => {
+describe('StatusBarPresenter', () => {
+  const settings = {
+    get: () => ({ providerId: 'google-cloud', targetLanguage: 'ko' }),
+  };
   beforeEach(() => {
     jest.clearAllMocks();
     (vscode.env as any).language = 'en';
   });
 
   it('aggregates parallel document progress and lists each file in the tooltip', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
@@ -24,7 +27,7 @@ describe('StatusBar', () => {
   });
 
   it('returns to single-document progress when another document completes', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
@@ -37,7 +40,7 @@ describe('StatusBar', () => {
   });
 
   it('shows only the selected language even when one document has multiple previews', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const document = vscode.Uri.file('/workspace/document.md');
 
@@ -48,7 +51,7 @@ describe('StatusBar', () => {
   });
 
   it('renders the remaining completed document after an in-progress document is removed', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const completed = vscode.Uri.file('/workspace/completed.md');
     const translating = vscode.Uri.file('/workspace/translating.md');
@@ -62,7 +65,7 @@ describe('StatusBar', () => {
   });
 
   it('returns to the ready display after the final document is removed', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const document = vscode.Uri.file('/workspace/document.md');
 
@@ -74,7 +77,7 @@ describe('StatusBar', () => {
   });
 
   it('keeps another document progress visible when one document fails', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const failed = vscode.Uri.file('/workspace/failed.md');
     const translating = vscode.Uri.file('/workspace/translating.md');
@@ -87,7 +90,7 @@ describe('StatusBar', () => {
   });
 
   it('restores a completed document after an errored document is removed', () => {
-    const statusBar = new StatusBar();
+    const statusBar = new StatusBarPresenter(settings as any);
     const item = (vscode.window.createStatusBarItem as jest.Mock).mock.results[0].value;
     const completed = vscode.Uri.file('/workspace/completed.md');
     const failed = vscode.Uri.file('/workspace/failed.md');

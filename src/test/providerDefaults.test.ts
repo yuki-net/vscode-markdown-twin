@@ -1,4 +1,4 @@
-import { DEFAULT_PROVIDER_ID, normalizeProviderId } from '../providers/ITranslationProvider';
+import { DEFAULT_PROVIDER_ID, normalizeProviderId } from '../domain/provider';
 
 describe('provider defaults', () => {
   it('uses Google Cloud as the initial provider', () => {

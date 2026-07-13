@@ -1,4 +1,4 @@
-import type { ProviderId } from '../providers/ITranslationProvider';
+import type { ProviderId } from './provider';
 
 export interface TranslationSpec {
   readonly providerId: ProviderId;

@@ -1,4 +1,4 @@
-import { PapagoProvider } from '../providers/papagoProvider';
+import { PapagoProvider } from '../adapters/providers/papagoProvider';
 
 describe('PapagoProvider', () => {
   let originalFetch: typeof fetch;
@@ -24,7 +24,7 @@ describe('PapagoProvider', () => {
     }) as any;
 
     const provider = new PapagoProvider('client-id:client-secret');
-    await provider.translate(['source text'], 'auto', 'zh-Hant');
+    await provider.translate(['source text'], 'auto', 'zh-Hant', new AbortController().signal);
 
     expect(global.fetch).toHaveBeenCalledWith(
       'https://naveropenapi.apigw.ntruss.com/nmt/v1/translation',

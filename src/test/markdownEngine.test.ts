@@ -1,4 +1,4 @@
-import { createMarkdownPreviewEngine } from '../preview/markdownEngine';
+import { createMarkdownPreviewEngine } from '../adapters/vscode/preview/markdownEngine';
 
 describe('createMarkdownPreviewEngine', () => {
   it('adds VS Code compatible heading ids and keeps duplicate headings unique', () => {

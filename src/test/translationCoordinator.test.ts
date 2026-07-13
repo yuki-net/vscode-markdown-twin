@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TranslationCoordinator } from '../application/translationCoordinator';
+import { VscodeTranslationCoordinator } from '../adapters/vscode/vscodeTranslationCoordinator';
 
 describe('TranslationCoordinator', () => {
   beforeEach(() => {
@@ -9,7 +9,7 @@ describe('TranslationCoordinator', () => {
 
   function createManager() {
     return {
-      onTranslationUpdated: jest.fn(),
+      onTranslationUpdated: jest.fn(() => ({ dispose: jest.fn() })),
       clearAllCache: jest.fn(),
       clearDocumentCache: jest.fn(),
       startTranslation: jest.fn(async () => true),
@@ -19,8 +19,16 @@ describe('TranslationCoordinator', () => {
   }
 
   it('clears the shared cache once and reruns every open preview document', async () => {
-    const first = { uri: vscode.Uri.file('/workspace/first.md') } as any;
-    const second = { uri: vscode.Uri.file('/workspace/second.md') } as any;
+    const first = {
+      uri: vscode.Uri.file('/workspace/first.md'),
+      languageId: 'markdown',
+      getText: () => 'first',
+    } as any;
+    const second = {
+      uri: vscode.Uri.file('/workspace/second.md'),
+      languageId: 'markdown',
+      getText: () => 'second',
+    } as any;
     (vscode.workspace.textDocuments as any[]).push(first, second);
     const manager = createManager();
     const targets = {
@@ -28,14 +36,22 @@ describe('TranslationCoordinator', () => {
       getTargetLanguages: jest.fn(() => ['ko']),
       getDocumentUris: jest.fn(() => [first.uri.toString(), second.uri.toString()]),
     };
-    const coordinator = new TranslationCoordinator(manager as any, targets);
+    const coordinator = new VscodeTranslationCoordinator(manager as any, targets);
 
     await coordinator.rerunAll({ clearAllCache: true });
 
     expect(manager.clearAllCache).toHaveBeenCalledTimes(1);
     expect(manager.startTranslation).toHaveBeenCalledTimes(2);
-    expect(manager.startTranslation).toHaveBeenNthCalledWith(1, first, undefined);
-    expect(manager.startTranslation).toHaveBeenNthCalledWith(2, second, undefined);
+    expect(manager.startTranslation).toHaveBeenCalledWith({
+      id: first.uri.toString(),
+      languageId: 'markdown',
+      text: 'first',
+    }, undefined);
+    expect(manager.startTranslation).toHaveBeenCalledWith({
+      id: second.uri.toString(),
+      languageId: 'markdown',
+      text: 'second',
+    }, undefined);
   });
 
   it('does not rerun documents that are no longer open', async () => {
@@ -45,7 +61,7 @@ describe('TranslationCoordinator', () => {
       getTargetLanguages: jest.fn(() => ['ko']),
       getDocumentUris: jest.fn(() => ['file:///closed.md']),
     };
-    const coordinator = new TranslationCoordinator(manager as any, targets);
+    const coordinator = new VscodeTranslationCoordinator(manager as any, targets);
 
     await coordinator.rerunAll();
 

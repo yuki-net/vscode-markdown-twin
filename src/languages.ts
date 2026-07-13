@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 export interface Language {
   code: string;
   label: string;
@@ -121,10 +119,4 @@ export function getLanguageLabel(code: string): string {
   }
 
   return TARGET_LANGUAGES.find(l => l.code === code)?.label ?? code;
-}
-
-export function getTargetLanguageCode(): string {
-  const config = vscode.workspace.getConfiguration('markdownTwin');
-  const rawTarget = config.get<string>('targetLanguage');
-  return normalizeTargetLanguageCode(rawTarget);
 }

@@ -1,4 +1,4 @@
-import { GoogleCloudProvider } from '../providers/googleCloudProvider';
+import { GoogleCloudProvider } from '../adapters/providers/googleCloudProvider';
 
 describe('GoogleCloudProvider Tests', () => {
   let provider: GoogleCloudProvider;
@@ -14,7 +14,7 @@ describe('GoogleCloudProvider Tests', () => {
   });
 
   it('should return empty array for empty input', async () => {
-    const results = await provider.translate([], 'auto', 'ko');
+    const results = await provider.translate([], 'auto', 'ko', new AbortController().signal);
     expect(results).toEqual([]);
   });
 
@@ -35,7 +35,7 @@ describe('GoogleCloudProvider Tests', () => {
       })
     ) as any;
 
-    const results = await provider.translate(['Hello', 'World'], 'en', 'ko');
+    const results = await provider.translate(['Hello', 'World'], 'en', 'ko', new AbortController().signal);
     expect(results).toEqual(['안녕하세요', '세계']);
     expect(global.fetch).toHaveBeenCalledWith(
       'https://translation.googleapis.com/language/translate/v2?key=fake-api-key',
@@ -65,7 +65,7 @@ describe('GoogleCloudProvider Tests', () => {
       })
     ) as any;
 
-    await expect(provider.translate(['Hello'], 'en', 'ko')).rejects.toThrow(
+    await expect(provider.translate(['Hello'], 'en', 'ko', new AbortController().signal)).rejects.toThrow(
       'Google Cloud Translation failed: Invalid API Key'
     );
   });

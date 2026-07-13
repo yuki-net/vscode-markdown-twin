@@ -1,9 +1,10 @@
-import type { ProviderId } from '../providers/ITranslationProvider';
-import type { TranslationViewMode } from '../translatedMarkdownBuilder';
+import type { ProviderId } from './provider';
+import type { TranslationViewMode } from './translationViewMode';
 
 export interface TranslationSettings {
   readonly providerId: ProviderId;
   readonly sourceLanguage: string;
+  readonly targetLanguage: string;
   readonly batchSize: number;
   readonly debounceDelayMs: number;
   readonly defaultMode: TranslationViewMode;

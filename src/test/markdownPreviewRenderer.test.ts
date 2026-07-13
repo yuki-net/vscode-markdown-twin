@@ -1,4 +1,4 @@
-import { renderMarkdownPreview } from '../preview/markdownPreviewRenderer';
+import { renderMarkdownPreview } from '../adapters/vscode/preview/previewRenderer';
 
 describe('renderMarkdownPreview', () => {
   it('renders asynchronously highlighted fenced code without hljs classes', async () => {

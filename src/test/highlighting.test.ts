@@ -1,7 +1,7 @@
 import * as path from 'path';
-import { LanguageGrammarCatalog } from '../preview/highlighting/languageGrammarCatalog';
-import { TextMateHighlightService } from '../preview/highlighting/textMateHighlightService';
-import { TextMateThemeResolver } from '../preview/highlighting/textMateThemeResolver';
+import { LanguageGrammarCatalog } from '../adapters/vscode/preview/highlighting/languageGrammarCatalog';
+import { TextMateHighlightService } from '../adapters/vscode/preview/highlighting/textMateHighlightService';
+import { TextMateThemeResolver } from '../adapters/vscode/preview/highlighting/textMateThemeResolver';
 
 const fixtureRoot = path.join(__dirname, 'fixtures', 'highlighting');
 

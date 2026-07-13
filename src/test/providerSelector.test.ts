@@ -1,11 +1,19 @@
 import * as vscode from 'vscode';
-import { ApiKeyManager } from '../apiKeyManager';
-import { ProviderSelector } from '../providerSelector';
+import { ApiKeyManager } from '../adapters/vscode/apiKeyManager';
+import { ProviderSelector } from '../adapters/vscode/providerSelector';
 
 describe('ProviderSelector', () => {
+  const settings = {
+    get: jest.fn(() => ({
+      providerId: 'google-cloud',
+      targetLanguage: 'ko',
+      azureRegion: 'global',
+    })),
+    update: jest.fn(async () => undefined),
+  };
   const createSecrets = () => ({
     get: jest.fn(() => Promise.resolve(undefined)),
-    store: jest.fn(() => Promise.resolve()),
+    set: jest.fn(() => Promise.resolve()),
     delete: jest.fn(() => Promise.resolve()),
   });
 
@@ -19,7 +27,7 @@ describe('ProviderSelector', () => {
 
   it('does not switch provider when required setup is cancelled', async () => {
     const secrets = createSecrets();
-    const apiKeyManager = new ApiKeyManager(secrets as any);
+    const apiKeyManager = new ApiKeyManager(secrets as any, settings as any);
     const translationManager = {
       isActive: jest.fn(() => false),
     };
@@ -31,7 +39,8 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension')
+      vscode.Uri.file('/extension'),
+      settings as any
     );
 
     (vscode.window.showQuickPick as jest.Mock).mockImplementation(async items => {
@@ -44,17 +53,13 @@ describe('ProviderSelector', () => {
     const result = await selector.show();
 
     expect(result).toBeUndefined();
-    expect(vscode.workspace.getConfiguration('markdownTwin').update).not.toHaveBeenCalledWith(
-      'provider',
-      'microsoft',
-      vscode.ConfigurationTarget.Global
-    );
+    expect(settings.update).not.toHaveBeenCalledWith({ providerId: 'microsoft' });
     expect(statusBar.setActiveProvider).not.toHaveBeenCalled();
   });
 
   it('hides delete API key action when no API keys are saved', async () => {
     const secrets = createSecrets();
-    const apiKeyManager = new ApiKeyManager(secrets as any);
+    const apiKeyManager = new ApiKeyManager(secrets as any, settings as any);
     const translationManager = {
       getMode: jest.fn(() => 'translationOnly'),
       isActive: jest.fn(() => false),
@@ -67,7 +72,8 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension')
+      vscode.Uri.file('/extension'),
+      settings as any
     );
 
     let providerMenuItems: readonly any[] = [];
@@ -86,7 +92,7 @@ describe('ProviderSelector', () => {
 
   it('does not show a back action when opening the API key picker directly', async () => {
     const secrets = createSecrets();
-    const apiKeyManager = new ApiKeyManager(secrets as any);
+    const apiKeyManager = new ApiKeyManager(secrets as any, settings as any);
     const translationManager = {
       isActive: jest.fn(() => false),
     };
@@ -98,7 +104,8 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension')
+      vscode.Uri.file('/extension'),
+      settings as any
     );
 
     let apiKeyItems: readonly any[] = [];
@@ -116,9 +123,9 @@ describe('ProviderSelector', () => {
   it('deletes a saved API key after confirmation', async () => {
     const secrets = createSecrets();
     (secrets.get as jest.Mock).mockImplementation((key: string) => Promise.resolve(
-      key === 'markdownTwin.apiKey.microsoft' ? 'azure-key' : undefined
+      key === 'microsoft' ? 'azure-key' : undefined
     ));
-    const apiKeyManager = new ApiKeyManager(secrets as any);
+    const apiKeyManager = new ApiKeyManager(secrets as any, settings as any);
     const translationManager = {
       getMode: jest.fn(() => 'translationOnly'),
       isActive: jest.fn(() => false),
@@ -131,7 +138,8 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension')
+      vscode.Uri.file('/extension'),
+      settings as any
     );
 
     (vscode.window.showQuickPick as jest.Mock)
@@ -143,7 +151,7 @@ describe('ProviderSelector', () => {
 
     await selector.showMenu();
 
-    expect(secrets.delete).toHaveBeenCalledWith('markdownTwin.apiKey.microsoft');
+    expect(secrets.delete).toHaveBeenCalledWith('microsoft');
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Deleted API key for Azure.');
   });
 });

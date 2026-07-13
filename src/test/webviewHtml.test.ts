@@ -1,5 +1,5 @@
 import { Uri } from 'vscode';
-import { buildPreviewWebviewHtml } from '../preview/webviewHtml';
+import { buildPreviewWebviewHtml } from '../adapters/vscode/preview/webviewHtml';
 
 describe('buildPreviewWebviewHtml', () => {
   it('applies VS Code markdown preview body classes and style variables', () => {

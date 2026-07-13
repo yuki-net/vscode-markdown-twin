@@ -1,4 +1,4 @@
-import { shouldTranslate, splitTranslatableParts, joinTranslatedParts } from '../languageDetector';
+import { shouldTranslate, splitTranslatableParts, joinTranslatedParts } from '../domain/markdown/extractTranslationUnits';
 
 describe('Language Detector Tests', () => {
   describe('shouldTranslate', () => {
