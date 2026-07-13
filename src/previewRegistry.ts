@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { PreviewPanel } from './previewPanel';
-import type { TranslationManager } from './translationManager';
+import type { TranslationCoordinator } from './application/translationCoordinator';
 import type { TextMateHighlightService } from './preview/highlighting/textMateHighlightService';
 import type { TranslationTargetRegistry } from './ports/translationTargetRegistry';
 
@@ -32,16 +32,22 @@ export class PreviewRegistry implements TranslationTargetRegistry {
     return this.findForDocument(documentUri).map(panel => panel.langCode);
   }
 
+  getDocumentUris(): readonly string[] {
+    return [...new Set(Array.from(PreviewPanel.allPanels.values()).map(
+      panel => panel.editorDocumentUri.toString()
+    ))];
+  }
+
   setCurrentPanel(panel: PreviewPanel | undefined): void {
     PreviewPanel.currentPanel = panel;
   }
 
   createOrShow(
     extensionUri: vscode.Uri,
-    translationManager: TranslationManager,
+    coordinator: TranslationCoordinator,
     document?: vscode.TextDocument,
     options: { avoidOpeningSource?: boolean } = {}
   ): Promise<boolean> {
-    return PreviewPanel.createOrShow(extensionUri, translationManager, document, options);
+    return PreviewPanel.createOrShow(extensionUri, coordinator, document, options);
   }
 }

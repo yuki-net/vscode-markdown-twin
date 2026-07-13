@@ -54,6 +54,7 @@ const mockConfig = {
 export const workspace = {
   getConfiguration: jest.fn(() => mockConfig),
   onDidChangeTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  textDocuments: [] as any[],
 };
 
 export const commands = {

@@ -14,19 +14,19 @@ import { PreviewPanel } from './previewPanel';
 import { t } from './i18n';
 import { isCursor } from './utils';
 import { retranslateActivePreview, retranslatePreviewDocument } from './previewActions';
-import { runTranslationForDocument } from './translationRunner';
 import { promptAzureRegion } from './azureRegion';
 import { TextMateHighlightService } from './preview/highlighting/textMateHighlightService';
 import { PreviewRegistry } from './previewRegistry';
+import { TranslationCoordinator } from './application/translationCoordinator';
 
-let translationManager: TranslationManager;
+let translationCoordinator: TranslationCoordinator;
 
 type ToggleTranslationHandler = (requestedLangCode?: string) => Promise<void>;
 
 interface ExtensionServices {
   context: vscode.ExtensionContext;
   apiKeyManager: ApiKeyManager;
-  translationManager: TranslationManager;
+  coordinator: TranslationCoordinator;
   statusBar: StatusBar;
   providerSelector: ProviderSelector;
   previewRegistry: PreviewRegistry;
@@ -134,8 +134,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const apiKeyManager = new ApiKeyManager(context.secrets);
   const previewRegistry = new PreviewRegistry();
-  translationManager = new TranslationManager(apiKeyManager, previewRegistry);
+  const translationManager = new TranslationManager(apiKeyManager, previewRegistry);
   context.subscriptions.push(translationManager);
+  translationCoordinator = new TranslationCoordinator(translationManager, previewRegistry);
 
   const statusBar = new StatusBar();
   translationManager.setStatusBar(statusBar);
@@ -148,7 +149,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const providerSelector = new ProviderSelector(
     apiKeyManager,
-    translationManager,
+    translationCoordinator,
     statusBar,
     context.extensionUri,
     previewRegistry
@@ -156,7 +157,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const services: ExtensionServices = {
     context,
     apiKeyManager,
-    translationManager,
+    coordinator: translationCoordinator,
     statusBar,
     providerSelector,
     previewRegistry,
@@ -172,7 +173,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function createToggleTranslationHandler(services: ExtensionServices): ToggleTranslationHandler {
-  const { context, translationManager, providerSelector, previewRegistry } = services;
+  const { context, coordinator, providerSelector, previewRegistry } = services;
 
   return async (requestedLangCode?: string) => {
     if (requestedLangCode) {
@@ -193,7 +194,7 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
     if (previewRegistry.getPanel(document.uri, code)) {
       await retranslatePreviewDocument({
         extensionUri: context.extensionUri,
-        translationManager,
+        coordinator,
         previewRegistry,
         document,
         options: {
@@ -215,17 +216,17 @@ function createToggleTranslationHandler(services: ExtensionServices): ToggleTran
 
     const providerId = normalizeProviderId(provider);
 
-    const panelReady = await previewRegistry.createOrShow(context.extensionUri, translationManager, document, {
+    const panelReady = await previewRegistry.createOrShow(context.extensionUri, coordinator, document, {
       avoidOpeningSource,
     });
     if (!panelReady) return;
 
-    await runTranslationForDocument(translationManager, document, { overrideProvider: providerId });
+    await coordinator.run(document, { overrideProvider: providerId });
   };
 }
 
 function registerConfigurationSync(services: ExtensionServices): void {
-  const { context, translationManager, statusBar, previewRegistry } = services;
+  const { context, coordinator, statusBar, previewRegistry } = services;
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async e => {
@@ -233,35 +234,38 @@ function registerConfigurationSync(services: ExtensionServices): void {
         syncTargetLangContext();
         const activePanel = previewRegistry.getActivePanel();
         if (activePanel) {
-          await previewRegistry.createOrShow(context.extensionUri, translationManager, activePanel.editorDocument);
+          await previewRegistry.createOrShow(context.extensionUri, coordinator, activePanel.editorDocument);
         }
 
-        if (translationManager.isActive()) {
-          await retranslateActivePreview(translationManager, previewRegistry, { clearCache: true });
+        if (coordinator.isActive()) {
+          await retranslateActivePreview(coordinator, previewRegistry, { clearCache: true });
         } else {
           statusBar.showOffline();
         }
       }
 
       if (e.affectsConfiguration('markdownTwin.sourceLanguage')) {
-        translationManager.clearAllCache();
-
-        if (translationManager.isActive()) {
-          await retranslateActivePreview(translationManager, previewRegistry);
+        if (coordinator.isActive()) {
+          await coordinator.rerunAll({ clearAllCache: true });
         } else {
+          coordinator.clearAllCache();
           statusBar.showOffline();
         }
       }
 
-      if (e.affectsConfiguration('markdownTwin.provider') && !translationManager.isActive()) {
-        statusBar.showOffline();
+      if (e.affectsConfiguration('markdownTwin.provider') || e.affectsConfiguration('markdownTwin.azureRegion')) {
+        if (coordinator.isActive()) {
+          await coordinator.rerunAll({ clearAllCache: true });
+        } else {
+          statusBar.showOffline();
+        }
       }
     })
   );
 }
 
 function registerCommands(services: ExtensionServices, toggleHandler: ToggleTranslationHandler): void {
-  const { context, translationManager, providerSelector, previewRegistry } = services;
+  const { context, coordinator, providerSelector, previewRegistry } = services;
 
   registerCommand(context, 'markdownTwin.toggleTranslation', toggleHandler);
 
@@ -270,7 +274,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
   }
 
   registerCommand(context, 'markdownTwin.toggleBilingual', async () => {
-    await translationManager.toggleMode();
+    await coordinator.toggleMode();
   });
 
   registerCommand(context, 'markdownTwin.selectProvider', async () => {
@@ -293,7 +297,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
     const activePanel = previewRegistry.getActivePanel();
     if (!activePanel) return;
     try {
-      const translated = translationManager.generateTranslatedMarkdown(
+      const translated = coordinator.generateTranslatedMarkdown(
         activePanel.editorDocument,
         activePanel.langCode,
         'translation-only'
@@ -301,7 +305,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
       await vscode.env.clipboard.writeText(translated.text);
       vscode.window.showInformationMessage(t('copiedToClipboard'));
     } catch (err: any) {
-      translationManager.logError('Failed to copy translated markdown', err);
+      coordinator.logError('Failed to copy translated markdown', err);
     }
   });
 
@@ -309,7 +313,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
     const activePanel = previewRegistry.getActivePanel();
     if (!activePanel) return;
     try {
-      const translated = translationManager.generateTranslatedMarkdown(
+      const translated = coordinator.generateTranslatedMarkdown(
         activePanel.editorDocument,
         activePanel.langCode,
         'translation-only'
@@ -320,7 +324,7 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
       await vscode.workspace.fs.writeFile(saveUri, Buffer.from(translated.text, 'utf8'));
       vscode.window.showInformationMessage(t('exportedSuccessfully', basenameFromUri(saveUri, 'translated.md')));
     } catch (err: any) {
-      translationManager.logError('Failed to export translated markdown', err);
+      coordinator.logError('Failed to export translated markdown', err);
     }
   });
 
@@ -337,12 +341,12 @@ function registerCommands(services: ExtensionServices, toggleHandler: ToggleTran
   });
 
   registerCommand(context, 'markdownTwin.retranslateFromPreviewContext', async () => {
-    await retranslateActivePreview(translationManager, previewRegistry, { clearCache: true });
+    await retranslateActivePreview(coordinator, previewRegistry, { clearCache: true });
   });
 }
 
 function registerEditorDocumentListeners(services: ExtensionServices): void {
-  const { context, translationManager, previewRegistry } = services;
+  const { context, coordinator, previewRegistry } = services;
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(async editor => {
@@ -356,9 +360,9 @@ function registerEditorDocumentListeners(services: ExtensionServices): void {
       const code = getTargetLanguageCode();
       previewRegistry.setCurrentPanel(panelsForDoc.find(p => p.langCode === code) ?? panelsForDoc[0]);
 
-      if (translationManager.isActive()) {
+      if (coordinator.isActive()) {
         await retranslatePreviewDocument({
-          translationManager,
+          coordinator,
           previewRegistry,
           document: editor.document,
         });
@@ -369,14 +373,14 @@ function registerEditorDocumentListeners(services: ExtensionServices): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument(e => {
       if (e.document.languageId !== 'markdown') return;
-      translationManager.invalidateCache(e.document.uri);
+      coordinator.invalidateDocument(e.document.uri);
     })
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidCloseTextDocument(doc => {
       if (previewRegistry.hasDocument(doc.uri.toString())) return;
-      translationManager.closeDocument(doc.uri);
+      coordinator.closeDocument(doc.uri);
     })
   );
 }
@@ -435,5 +439,5 @@ function basenameFromUri(uri: vscode.Uri, fallback: string): string {
 }
 
 export function deactivate() {
-  translationManager?.stopTranslation();
+  translationCoordinator?.stop();
 }

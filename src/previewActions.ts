@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { PreviewPanel } from './previewPanel';
-import { TranslationManager } from './translationManager';
-import { runTranslationForDocument, type RunTranslationOptions } from './translationRunner';
+import { TranslationCoordinator, type RunTranslationOptions } from './application/translationCoordinator';
 import { PreviewRegistry } from './previewRegistry';
 
 export interface RetranslatePreviewOptions extends RunTranslationOptions {
@@ -10,7 +9,7 @@ export interface RetranslatePreviewOptions extends RunTranslationOptions {
 
 interface RetranslatePreviewArgs {
   extensionUri?: vscode.Uri;
-  translationManager: TranslationManager;
+  coordinator: TranslationCoordinator;
   previewRegistry: PreviewRegistry;
   document: vscode.TextDocument | undefined;
   options?: RetranslatePreviewOptions;
@@ -30,28 +29,28 @@ export function getActivePreviewDocument(previewRegistry: PreviewRegistry): vsco
 }
 
 export async function retranslatePreviewDocument(args: RetranslatePreviewArgs): Promise<boolean> {
-  const { extensionUri, translationManager, previewRegistry, document, options } = args;
+  const { extensionUri, coordinator, previewRegistry, document, options } = args;
   if (!document) return false;
 
   if (options?.revealPreview) {
     if (!extensionUri) return false;
 
-    const panelReady = await previewRegistry.createOrShow(extensionUri, translationManager, document);
+    const panelReady = await previewRegistry.createOrShow(extensionUri, coordinator, document);
     if (!panelReady) {
       return false;
     }
   }
 
-  return runTranslationForDocument(translationManager, document, options);
+  return coordinator.run(document, options);
 }
 
 export async function retranslateActivePreview(
-  translationManager: TranslationManager,
+  coordinator: TranslationCoordinator,
   previewRegistry: PreviewRegistry,
   options?: RetranslatePreviewOptions
 ): Promise<boolean> {
   return retranslatePreviewDocument({
-    translationManager,
+    coordinator,
     previewRegistry,
     document: getActivePreviewDocument(previewRegistry),
     options,

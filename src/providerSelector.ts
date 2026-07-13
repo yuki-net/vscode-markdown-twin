@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ApiKeyManager } from './apiKeyManager';
-import { TranslationManager } from './translationManager';
+import { TranslationCoordinator } from './application/translationCoordinator';
 import { StatusBar } from './statusBar';
 import {
   ProviderId,
@@ -35,7 +35,7 @@ export const PROVIDER_DEFS: Array<{ id: ProviderId; displayName: string; require
 export class ProviderSelector {
   constructor(
     private apiKeyManager: ApiKeyManager,
-    private translationManager: TranslationManager,
+    private coordinator: TranslationCoordinator,
     private statusBar: StatusBar,
     private extensionUri: vscode.Uri,
     private previewRegistry: PreviewRegistry
@@ -49,7 +49,7 @@ export class ProviderSelector {
 
       const displayProvider = PROVIDER_DISPLAY_NAMES[providerId];
       const langFlagUri = vscode.Uri.joinPath(this.extensionUri, 'media', 'flags', `${targetLang}.svg`);
-      const mode = this.translationManager.getMode();
+      const mode = this.coordinator.getMode();
       const modeLabel = mode === 'bilingual' ? t('bilingual') : t('translationOnly');
       const modeIcon = mode === 'bilingual' ? '$(split-horizontal)' : '$(file)';
 
@@ -80,7 +80,7 @@ export class ProviderSelector {
       }
 
       if (top.action === 'mode') {
-        await this.translationManager.toggleMode();
+        await this.coordinator.toggleMode();
         return;
       }
 
@@ -214,11 +214,11 @@ export class ProviderSelector {
 
     const activePanel = this.previewRegistry.getActivePanel();
     if (activePanel) {
-      await this.previewRegistry.createOrShow(this.extensionUri, this.translationManager, activePanel.editorDocument);
+      await this.previewRegistry.createOrShow(this.extensionUri, this.coordinator, activePanel.editorDocument);
     }
 
-    if (this.translationManager.isActive()) {
-      await retranslateActivePreview(this.translationManager, this.previewRegistry, { clearCache: true });
+    if (this.coordinator.isActive()) {
+      await retranslateActivePreview(this.coordinator, this.previewRegistry, { clearCache: true });
     } else {
       this.statusBar.showOffline();
     }
@@ -294,8 +294,8 @@ export class ProviderSelector {
     const config = vscode.workspace.getConfiguration('markdownTwin');
     await config.update('provider', selected.id, vscode.ConfigurationTarget.Global);
 
-    if (this.translationManager.isActive()) {
-      await retranslateActivePreview(this.translationManager, this.previewRegistry, {
+    if (this.coordinator.isActive()) {
+      await this.coordinator.rerunAll({
         clearAllCache: true,
         overrideProvider: selected.id,
       });

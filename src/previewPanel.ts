@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { TranslationManager } from './translationManager';
+import { TranslationCoordinator } from './application/translationCoordinator';
 import { getTargetLanguageCode } from './languages';
 import { t } from './i18n';
 import { isCursor } from './utils';
@@ -8,7 +8,6 @@ import { createLocalResourceRoots, createWebviewNonce, resolveMarkdownResourceUr
 import { getMarkdownPreviewBodyClasses, getMarkdownPreviewStyleVars, shouldScrollEditorWithPreview, shouldScrollPreviewWithEditor } from './preview/markdownPreviewSettings';
 import { buildPreviewWebviewHtml } from './preview/webviewHtml';
 import { buildSourceViewModel, emptySourceViewModel } from './preview/sourceViewModel';
-import { runTranslationForDocument } from './translationRunner';
 import type { TranslatedMarkdownResult } from './translatedMarkdownBuilder';
 import { renderMarkdownPreview } from './preview/markdownPreviewRenderer';
 import type { TextMateHighlightService } from './preview/highlighting/textMateHighlightService';
@@ -123,7 +122,7 @@ export class PreviewPanel {
 
   public static async createOrShow(
     extensionUri: vscode.Uri,
-    translationManager: TranslationManager,
+    coordinator: TranslationCoordinator,
     document?: vscode.TextDocument,
     options: { avoidOpeningSource?: boolean } = {}
   ): Promise<boolean> {
@@ -174,7 +173,7 @@ export class PreviewPanel {
       extensionUri,
       previewDocument,
       editor,
-      translationManager,
+      coordinator,
       PreviewPanel.highlightService,
       code
     );
@@ -189,7 +188,7 @@ export class PreviewPanel {
     extensionUri: vscode.Uri,
     document: vscode.TextDocument,
     editor: vscode.TextEditor | undefined,
-    private translationManager: TranslationManager,
+    private coordinator: TranslationCoordinator,
     private readonly highlightService: TextMateHighlightService,
     langCode: string
   ) {
@@ -216,8 +215,8 @@ export class PreviewPanel {
         PreviewPanel.syncActiveContexts();
         if (!this._panel.active) return;
         PreviewPanel.currentPanel = this;
-        if (this.translationManager.isActive()) {
-          void runTranslationForDocument(this.translationManager, this._document);
+        if (this.coordinator.isActive()) {
+          void this.coordinator.run(this._document);
         } else {
           void this._update();
         }
@@ -299,7 +298,7 @@ export class PreviewPanel {
 
   private _registerTranslationUpdates(): void {
     this._disposables.push(
-      this.translationManager.onTranslationUpdated((updatedUri) => {
+      this.coordinator.onDidChange((updatedUri) => {
         const docUriStr = this._document.uri.toString();
         if (!updatedUri || updatedUri.toString() === docUriStr) {
           void this._update();
@@ -367,7 +366,7 @@ export class PreviewPanel {
       typographer: previewConfig.get<boolean>('typographer'),
       uriScheme: vscode.env.uriScheme,
     }, this.highlightService, (message, error) => {
-      this.translationManager.logError(message, error, false);
+      this.coordinator.logError(message, error, false);
     });
   }
 
@@ -377,15 +376,15 @@ export class PreviewPanel {
     const document = this._document;
     const shouldRenderPreview = this._viewMode === 'preview' || !this._isInitialized;
     const shouldRenderSource = this._viewMode === 'source';
-    const previewTranslated = this.translationManager.generateTranslatedMarkdown(document, this.langCode);
+    const previewTranslated = this.coordinator.generateTranslatedMarkdown(document, this.langCode);
     const sourceTranslated = shouldRenderSource
-      ? this.translationManager.generateTranslatedMarkdown(document, this.langCode, 'translation-only')
+      ? this.coordinator.generateTranslatedMarkdown(document, this.langCode, 'translation-only')
       : previewTranslated;
     const [renderedHtml, sourceView] = await Promise.all([
       shouldRenderPreview ? this.renderPreviewHtml(previewTranslated) : Promise.resolve(undefined),
       shouldRenderSource
         ? buildSourceViewModel(sourceTranslated, this.highlightService, (message, err) => {
-        this.translationManager.logError(message, err, false);
+        this.coordinator.logError(message, err, false);
       })
         : Promise.resolve(emptySourceViewModel(sourceTranslated)),
     ]);
@@ -449,7 +448,7 @@ export class PreviewPanel {
       panel => panel.editorDocumentUri.toString() === uriStr
     );
     if (!hasRemainingPanelForDocument) {
-      this.translationManager.stopDocumentTranslation(this._document.uri);
+      this.coordinator.stopDocument(this._document.uri);
     }
 
     if (PreviewPanel.currentPanel === this) {
@@ -459,7 +458,7 @@ export class PreviewPanel {
     PreviewPanel.syncActiveContexts();
 
     if (PreviewPanel.allPanels.size === 0) {
-      this.translationManager.stopTranslation();
+      this.coordinator.stop();
       vscode.commands.executeCommand('setContext', 'markdownTwin.previewActive', false);
       vscode.commands.executeCommand('setContext', 'markdownTwin.showingSource', false);
       vscode.commands.executeCommand('setContext', 'markdownTwin.translationActive', false);

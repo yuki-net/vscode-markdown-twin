@@ -9,6 +9,9 @@ const translationTargets = {
   getTargetLanguages: (documentUri: string) => Array.from(PreviewPanel.allPanels.values())
     .filter(panel => panel.editorDocumentUri.toString() === documentUri)
     .map(panel => panel.langCode),
+  getDocumentUris: () => [...new Set(Array.from(PreviewPanel.allPanels.values()).map(
+    panel => panel.editorDocumentUri.toString()
+  ))],
 };
 
 describe('TranslationManager', () => {
