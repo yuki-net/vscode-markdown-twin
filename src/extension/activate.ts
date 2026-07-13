@@ -7,6 +7,7 @@ import { ProviderSelector } from '../adapters/vscode/providerSelector';
 import { RegistryTranslationProviderFactory } from '../adapters/providers/providerRegistry';
 import { StatusBarPresenter } from '../adapters/vscode/statusBarPresenter';
 import { TranslationCoordinator } from '../application/translationCoordinator';
+import { InMemoryTranslationCache } from '../application/inMemoryTranslationCache';
 import { VscodeTranslationCoordinator } from '../adapters/vscode/vscodeTranslationCoordinator';
 import { VscodeTranslationDiagnostics } from '../adapters/vscode/vscodeTranslationDiagnostics';
 import { VscodeSettingsRepository } from '../adapters/vscode/vscodeSettingsRepository';
@@ -27,7 +28,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     previewRegistry,
     settingsRepository,
     new RegistryTranslationProviderFactory(secretRepository),
-    diagnostics
+    diagnostics,
+    new InMemoryTranslationCache()
   );
   translationCoordinator = new VscodeTranslationCoordinator(applicationCoordinator, previewRegistry);
 

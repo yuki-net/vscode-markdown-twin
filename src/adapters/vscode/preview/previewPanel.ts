@@ -9,7 +9,10 @@ import type { TranslatedMarkdownResult } from '../../../domain/translationResult
 import { renderMarkdownPreview } from './previewRenderer';
 import type { TextMateHighlightService } from './highlighting/textMateHighlightService';
 import type { PreviewRegistry } from './previewRegistry';
-import type { PreviewWebviewMessage } from '../../../webview/protocol';
+import {
+  isPreviewWebviewMessage,
+  type ExtensionToPreviewMessage,
+} from '../../../webview/protocol';
 
 function normalizeSourcePosition(value: unknown): number {
   const line = Number(value);
@@ -62,7 +65,7 @@ export class PreviewPanel {
 
   public setViewMode(mode: 'preview' | 'source'): void {
     this._viewMode = mode;
-    this._panel.webview.postMessage({ type: 'setViewMode', mode });
+    this._postMessage({ type: 'setViewMode', mode });
     this.registry.syncActiveContexts();
     void this._update();
   }
@@ -106,8 +109,8 @@ export class PreviewPanel {
 
   private _registerWebviewMessages(): void {
     this._panel.webview.onDidReceiveMessage(
-      (message: PreviewWebviewMessage) => {
-        if (message.command !== 'scroll') return;
+      (message: unknown) => {
+        if (!isPreviewWebviewMessage(message)) return;
         if (!shouldScrollEditorWithPreview()) return;
 
         this._lastSyncedLine = normalizeSourcePosition(message.line);
@@ -222,6 +225,9 @@ export class PreviewPanel {
       const markdownCssUri = webview.asWebviewUri(
         vscode.Uri.file(path.join(this._extensionUri.fsPath, 'media', 'markdown.css'))
       );
+      const webviewScriptUri = webview.asWebviewUri(
+        vscode.Uri.file(path.join(this._extensionUri.fsPath, 'dist', 'webview.js'))
+      );
       webview.html = buildPreviewWebviewHtml({
         previewHeaderTitle: `Twin Preview ${path.basename(document.fileName)}`,
         renderedHtml: renderedHtml ?? '',
@@ -234,6 +240,7 @@ export class PreviewPanel {
         sourceHighlightError,
         markdownCssUri,
         twinCssUri,
+        webviewScriptUri,
         bodyClasses: getMarkdownPreviewBodyClasses(),
         htmlStyleVars: getMarkdownPreviewStyleVars(),
         cspSource: webview.cspSource,
@@ -242,7 +249,7 @@ export class PreviewPanel {
       });
       this._isInitialized = true;
     } else {
-      webview.postMessage({
+      this._postMessage({
         type: 'update',
         html: renderedHtml,
         sourceHtml: shouldRenderSource ? sourceView.highlightedSource : undefined,
@@ -288,6 +295,10 @@ export class PreviewPanel {
     this._editor = event.textEditor;
     this._lastSyncedLine = topLine;
     this._setScrollLeader('editor', 180);
-    void this._panel.webview.postMessage({ type: 'scroll', line: topLine, origin: 'editor' });
+    this._postMessage({ type: 'scroll', line: topLine, origin: 'editor' });
+  }
+
+  private _postMessage(message: ExtensionToPreviewMessage): void {
+    void this._panel.webview.postMessage(message);
   }
 }

@@ -5,7 +5,18 @@ import type { DocumentTranslationSession, TranslationRun } from './documentTrans
 export type TranslationExecutionResult =
   | { readonly kind: 'completed' }
   | { readonly kind: 'cancelled' }
+  | {
+      readonly kind: 'partial';
+      readonly failures: readonly TranslationExecutionFailure[];
+      readonly completed: number;
+      readonly total: number;
+    }
   | { readonly kind: 'failed'; readonly error: unknown; readonly targetLanguage: string };
+
+export interface TranslationExecutionFailure {
+  readonly error: unknown;
+  readonly targetLanguage: string;
+}
 
 export interface TranslationExecutionRequest {
   readonly session: DocumentTranslationSession;
@@ -42,6 +53,7 @@ export class TranslationExecutor {
       onProgress,
     } = request;
     let completed = 0;
+    const failures: TranslationExecutionFailure[] = [];
 
     onProgress(completed, totalCount);
 
@@ -70,7 +82,10 @@ export class TranslationExecutor {
           if (!committed) return { kind: 'cancelled' };
         } catch (error: unknown) {
           if (!session.isCurrent(run) || run.signal.aborted) return { kind: 'cancelled' };
-          return { kind: 'failed', error, targetLanguage };
+          failures.push({ error, targetLanguage });
+          // A provider failure usually affects the remaining batches for the same
+          // target. Preserve successful batches and continue with other targets.
+          break;
         }
 
         completed += batch.length;
@@ -78,8 +93,15 @@ export class TranslationExecutor {
       }
     }
 
-    return session.isCurrent(run) && isEnabled()
-      ? { kind: 'completed' }
-      : { kind: 'cancelled' };
+    if (!session.isCurrent(run) || !isEnabled()) return { kind: 'cancelled' };
+    if (failures.length === 0) return { kind: 'completed' };
+    if (completed === 0) {
+      return {
+        kind: 'failed',
+        error: failures[0].error,
+        targetLanguage: failures[0].targetLanguage,
+      };
+    }
+    return { kind: 'partial', failures, completed, total: totalCount };
   }
 }

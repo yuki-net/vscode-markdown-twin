@@ -1,5 +1,5 @@
 import type { TranslationProvider } from '../../ports/translationProvider';
-import { readResponseErrorMessage, TooManyRequestsError } from './httpError';
+import { readResponseErrorMessage, readRetryAfterMilliseconds, TooManyRequestsError } from './httpError';
 import { mapDeepLSourceLanguageCode, mapDeepLTargetLanguageCode } from './languageCodeMapper';
 
 export class DeeplProvider implements TranslationProvider {
@@ -36,7 +36,10 @@ export class DeeplProvider implements TranslationProvider {
         payload => payload?.message,
       ]);
       if (response.status === 429) {
-        throw new TooManyRequestsError(`DeepL rate limit: ${errorMsg}`);
+        throw new TooManyRequestsError(
+          `DeepL rate limit: ${errorMsg}`,
+          readRetryAfterMilliseconds(response)
+        );
       }
       throw new Error(`DeepL translation failed (${response.status}): ${errorMsg}`);
     }

@@ -18,9 +18,16 @@ export class InvalidTranslationResponseError extends Error {
 }
 
 export class ProviderRateLimitError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly retryAfterMs?: number) {
     super(message);
     this.name = 'ProviderRateLimitError';
+  }
+}
+
+export class ProviderTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Translation provider timed out after ${timeoutMs}ms`);
+    this.name = 'ProviderTimeoutError';
   }
 }
 

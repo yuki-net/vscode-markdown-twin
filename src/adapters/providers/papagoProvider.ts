@@ -1,5 +1,5 @@
 import type { TranslationProvider } from '../../ports/translationProvider';
-import { readResponseErrorMessage, TooManyRequestsError } from './httpError';
+import { readResponseErrorMessage, readRetryAfterMilliseconds, TooManyRequestsError } from './httpError';
 import { mapLanguageCodeForProvider } from './languageCodeMapper';
 
 export class PapagoProvider implements TranslationProvider {
@@ -20,10 +20,19 @@ export class PapagoProvider implements TranslationProvider {
   async translate(texts: readonly string[], sourceLang: string, targetLang: string, signal: AbortSignal): Promise<readonly string[]> {
     if (texts.length === 0) return [];
 
-    // Papagoは1リクエスト1テキストなので、Promise.allで並列化する。
-    return Promise.all(
-      texts.map(text => this.translateOne(text, sourceLang, targetLang, signal))
-    );
+    // Papago accepts one text per request. Keep a small bounded pool so a large
+    // translation batch cannot fan out into an unbounded number of HTTP calls.
+    const results = new Array<string>(texts.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (nextIndex < texts.length) {
+        const index = nextIndex++;
+        results[index] = await this.translateOne(texts[index], sourceLang, targetLang, signal);
+      }
+    };
+    const concurrency = Math.min(3, texts.length);
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    return results;
   }
 
   private async translateOne(text: string, sourceLang: string, targetLang: string, signal: AbortSignal): Promise<string> {
@@ -47,7 +56,10 @@ export class PapagoProvider implements TranslationProvider {
         payload => payload?.error?.message,
       ]);
       if (response.status === 429) {
-        throw new TooManyRequestsError(`Papago rate limit: ${errorMsg}`);
+        throw new TooManyRequestsError(
+          `Papago rate limit: ${errorMsg}`,
+          readRetryAfterMilliseconds(response)
+        );
       }
       throw new Error(`Papago translation failed (${response.status}): ${errorMsg}`);
     }

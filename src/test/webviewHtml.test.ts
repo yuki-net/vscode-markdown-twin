@@ -14,6 +14,7 @@ describe('buildPreviewWebviewHtml', () => {
       initialScrollLine: 0,
       markdownCssUri: Uri.parse('vscode-resource:/markdown.css') as any,
       twinCssUri: Uri.parse('vscode-resource:/markdown-twin.css') as any,
+      webviewScriptUri: Uri.parse('vscode-resource:/webview.js') as any,
       bodyClasses: ['vscode-body', 'wordWrap', 'scrollBeyondLastLine', 'showEditorSelection'],
       htmlStyleVars: {
         '--markdown-font-size': '15px',
@@ -26,11 +27,9 @@ describe('buildPreviewWebviewHtml', () => {
 
     expect(html).toContain('class="vscode-body wordWrap scrollBeyondLastLine showEditorSelection mt-preview-mode"');
     expect(html).toContain('style="--markdown-font-size: 15px; --markdown-line-height: 1.6;"');
-    expect(html).toContain('function interpolateOffsetForLine');
-    expect(html).toContain('function getPreviewEditorLineForPageOffset');
-    expect(html).toContain('function getSourceAnchorLineAtContainerTop');
-    expect(html).toContain('#source-code .code-line[data-source-index]');
-    expect(html).toContain('parseDataSourceIndex(row) ?? parseDataLine(row)');
-    expect(html).toContain("anchorLine, origin: 'webview', mode: 'source'");
+    expect(html).toContain('id="markdown-twin-initial-state" type="application/json"');
+    expect(html).toContain('"viewMode":"preview"');
+    expect(html).toContain('nonce="nonce" src="vscode-resource:/webview.js"');
+    expect(html).not.toContain('function interpolateOffsetForLine');
   });
 });

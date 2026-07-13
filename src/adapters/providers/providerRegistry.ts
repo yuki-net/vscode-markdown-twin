@@ -11,6 +11,12 @@ import { DeeplProvider } from './deeplProvider';
 import { GoogleCloudProvider } from './googleCloudProvider';
 import { MicrosoftProvider } from './microsoftProvider';
 import { PapagoProvider } from './papagoProvider';
+import {
+  DEFAULT_PROVIDER_EXECUTION_POLICY,
+  ProviderConcurrencyGate,
+  ResilientTranslationProvider,
+  type ProviderExecutionPolicyOptions,
+} from './resilientTranslationProvider';
 
 export interface ProviderDefinition {
   readonly id: ProviderId;
@@ -47,7 +53,13 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
 ];
 
 export class RegistryTranslationProviderFactory implements TranslationProviderFactory {
-  constructor(private readonly secrets: SecretRepository) {}
+  private readonly gates = new Map<ProviderId, ProviderConcurrencyGate>();
+
+  constructor(
+    private readonly secrets: SecretRepository,
+    private readonly executionPolicy: ProviderExecutionPolicyOptions = DEFAULT_PROVIDER_EXECUTION_POLICY,
+    private readonly maxConcurrency = 2
+  ) {}
 
   getMetadata(id: ProviderId): TranslationProviderMetadata | undefined {
     const definition = PROVIDER_DEFINITIONS.find(provider => provider.id === id);
@@ -69,6 +81,15 @@ export class RegistryTranslationProviderFactory implements TranslationProviderFa
     if (definition.requiresKey && !apiKey) {
       throw new MissingProviderCredentialError(id);
     }
-    return definition.create(apiKey, options);
+    let gate = this.gates.get(id);
+    if (!gate) {
+      gate = new ProviderConcurrencyGate(this.maxConcurrency);
+      this.gates.set(id, gate);
+    }
+    return new ResilientTranslationProvider(
+      definition.create(apiKey, options),
+      gate,
+      this.executionPolicy
+    );
   }
 }

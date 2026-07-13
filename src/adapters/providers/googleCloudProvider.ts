@@ -1,5 +1,5 @@
 import type { TranslationProvider } from '../../ports/translationProvider';
-import { readResponseErrorMessage, TooManyRequestsError } from './httpError';
+import { readResponseErrorMessage, readRetryAfterMilliseconds, TooManyRequestsError } from './httpError';
 import { mapLanguageCodeForProvider } from './languageCodeMapper';
 
 export class GoogleCloudProvider implements TranslationProvider {
@@ -36,7 +36,10 @@ export class GoogleCloudProvider implements TranslationProvider {
         payload => payload?.error?.message,
       ]);
       if (response.status === 429) {
-        throw new TooManyRequestsError(`Google Cloud rate limit: ${errorMsg}`);
+        throw new TooManyRequestsError(
+          `Google Cloud rate limit: ${errorMsg}`,
+          readRetryAfterMilliseconds(response)
+        );
       }
       throw new Error(`Google Cloud Translation failed: ${errorMsg}`);
     }

@@ -2,6 +2,7 @@ const esbuild = require('esbuild');
 const fs = require('fs');
 
 fs.rmSync('dist/extension.js.LEGAL.txt', { force: true });
+fs.rmSync('dist/webview.js.LEGAL.txt', { force: true });
 
 async function build() {
   await esbuild.build({
@@ -17,10 +18,24 @@ async function build() {
     legalComments: 'linked', // ライセンス文を dist/extension.js.LEGAL.txt に出力
   });
 
-  const output = fs.readFileSync('dist/extension.js', 'utf8');
-  const unresolvedRelativeRequire = output.match(/\brequire\((["'])\.{1,2}\//);
-  if (unresolvedRelativeRequire) {
-    throw new Error(`Bundle contains an unresolved relative require: ${unresolvedRelativeRequire[0]}`);
+  await esbuild.build({
+    entryPoints: ['src/webview/runtimeEntry.ts'],
+    bundle: true,
+    outfile: 'dist/webview.js',
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    sourcemap: true,
+    minify: false,
+    legalComments: 'linked',
+  });
+
+  for (const outputFile of ['dist/extension.js', 'dist/webview.js']) {
+    const output = fs.readFileSync(outputFile, 'utf8');
+    const unresolvedRelativeRequire = output.match(/\brequire\((["'])\.{1,2}\//);
+    if (unresolvedRelativeRequire) {
+      throw new Error(`${outputFile} contains an unresolved relative require: ${unresolvedRelativeRequire[0]}`);
+    }
   }
 }
 

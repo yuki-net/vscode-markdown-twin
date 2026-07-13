@@ -37,6 +37,9 @@ export const window = {
   showInputBox: jest.fn(),
   showQuickPick: jest.fn(),
   activeTextEditor: undefined as any,
+  visibleTextEditors: [] as any[],
+  onDidChangeActiveTextEditor: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidChangeTextEditorVisibleRanges: jest.fn(() => ({ dispose: jest.fn() })),
 };
 
 const mockConfig = {
@@ -54,6 +57,9 @@ const mockConfig = {
 export const workspace = {
   getConfiguration: jest.fn(() => mockConfig),
   onDidChangeTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidChangeConfiguration: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidCloseTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
+  onDidOpenTextDocument: jest.fn(() => ({ dispose: jest.fn() })),
   textDocuments: [] as any[],
 };
 

@@ -92,4 +92,38 @@ describe('TranslationExecutor', () => {
     await expect(execution).resolves.toEqual({ kind: 'cancelled' });
     expect(commitBatch).not.toHaveBeenCalled();
   });
+
+  it('reports partial completion and preserves successful target batches', async () => {
+    const session = new DocumentTranslationSession();
+    const run = session.begin();
+    const commitBatch = jest.fn();
+    const provider = {
+      id: 'google-cloud' as const,
+      name: 'Google Cloud',
+      translate: jest.fn()
+        .mockResolvedValueOnce(['translated:one'])
+        .mockRejectedValueOnce(new Error('second target failed')),
+    };
+
+    const result = await new TranslationExecutor().execute({
+      session,
+      run,
+      provider,
+      sourceLanguage: 'en',
+      targetLanguages: ['ja', 'ko'],
+      pendingByTarget: new Map([
+        ['ja', ['one']],
+        ['ko', ['two']],
+      ]),
+      totalCount: 2,
+      batchSize: 10,
+      isEnabled: () => true,
+      commitBatch,
+      onProgress: jest.fn(),
+    });
+
+    expect(result).toMatchObject({ kind: 'partial', completed: 1, total: 2 });
+    expect(commitBatch).toHaveBeenCalledTimes(1);
+    expect(commitBatch).toHaveBeenCalledWith('ja', ['one'], ['translated:one']);
+  });
 });

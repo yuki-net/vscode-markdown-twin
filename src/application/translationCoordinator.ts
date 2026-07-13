@@ -3,7 +3,6 @@ import { normalizeProviderId } from '../domain/provider';
 import { shouldTranslate, splitTranslatableParts, joinTranslatedParts, EXCLUDED_TOKEN_TYPES } from '../domain/markdown/extractTranslationUnits';
 import { buildTranslatedMarkdown, type TranslationViewMode } from '../domain/markdown/translatedMarkdownBuilder';
 import type { TranslatedMarkdownResult } from '../domain/translationResult';
-import { InMemoryTranslationCache } from './inMemoryTranslationCache';
 import { DocumentTranslationSession, type TranslationRun } from './documentTranslationSession';
 import type { TranslationTargetRegistry } from '../ports/translationTargetRegistry';
 import { createTranslationCacheKey, type TranslationSpec } from '../domain/translationSpec';
@@ -19,13 +18,14 @@ import {
   MissingProviderCredentialError,
   ProviderConfigurationError,
   ProviderRateLimitError,
+  ProviderTimeoutError,
 } from '../domain/translationError';
 import type { TranslationDocument } from '../domain/translationDocument';
 import type { TranslationDiagnostics } from '../ports/translationDiagnostics';
+import type { TranslationCache } from '../ports/translationCache';
 import { SimpleEvent } from './translationEvents';
 
 export class TranslationCoordinator {
-  private cache = new InMemoryTranslationCache();
   private currentMode: TranslationViewMode = 'translation-only';
   private statusBar: TranslationStatusSink | null = null;
   private md = new MarkdownIt();
@@ -40,7 +40,8 @@ export class TranslationCoordinator {
     private translationTargets: TranslationTargetRegistry,
     private settings: TranslationSettingsRepository,
     private providerFactory: TranslationProviderFactory,
-    private diagnostics: TranslationDiagnostics
+    private diagnostics: TranslationDiagnostics,
+    private readonly cache: TranslationCache
   ) {
     this.currentMode = settings.get().defaultMode;
     this.diagnostics.info('Markdown Twin active.');
@@ -245,6 +246,22 @@ export class TranslationCoordinator {
         result.targetLanguage
       );
     }
+    if (result.kind === 'partial') {
+      const failures = result.failures.map(failure =>
+        this.toTranslationFailure(failure.error, failure.targetLanguage)
+      );
+      this.stateStore.setStatus(docUriStr, { kind: 'partial', failures });
+      this.statusBar?.showError(docUriStr, providerName);
+      for (const failure of result.failures) {
+        await this.handleTranslationFailure(
+          failure.error,
+          document.id,
+          providerName,
+          failure.targetLanguage
+        );
+      }
+      this.translationUpdated.fire(document.id);
+    }
     return false;
   }
 
@@ -309,6 +326,9 @@ export class TranslationCoordinator {
     }
     if (error instanceof ProviderRateLimitError) {
       return { kind: 'rate-limit', message: error.message, targetLanguage };
+    }
+    if (error instanceof ProviderTimeoutError) {
+      return { kind: 'timeout', message: error.message, targetLanguage };
     }
     return {
       kind: 'provider',

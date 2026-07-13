@@ -11,7 +11,10 @@ export function createWebviewNonce(): string {
 }
 
 export function createLocalResourceRoots(extensionUri: vscode.Uri, document: vscode.TextDocument): vscode.Uri[] {
-  const roots = [vscode.Uri.file(path.join(extensionUri.fsPath, 'media'))];
+  const roots = [
+    vscode.Uri.file(path.join(extensionUri.fsPath, 'media')),
+    vscode.Uri.file(path.join(extensionUri.fsPath, 'dist')),
+  ];
 
   if (document.uri.scheme === 'file') {
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);

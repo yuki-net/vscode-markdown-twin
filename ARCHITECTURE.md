@@ -47,7 +47,7 @@ Providerのバッチ呼び出し、返却件数検証、世代確認後のコミ
 
 ### TranslationStore
 
-文書ごとの`enabled`状態と`idle / running / completed / failed / cancelled`実行状態を分離して保持する。
+文書ごとの`enabled`状態と`idle / running / completed / partial / failed / cancelled`実行状態を分離して保持する。
 
 ### DocumentTranslationSession
 
@@ -102,3 +102,18 @@ Command / Configuration Event
 - 翻訳サービス固有のHTTP処理: `adapters/providers/`
 
 境界を越えて便利な静的状態を追加せず、必要な依存はコンストラクターで注入する。
+
+## Provider実行ポリシー
+
+- Provider呼び出しは共有ゲートで同時実行数を制限する。
+- 1回の呼び出しは30秒でタイムアウトする。
+- 429は`Retry-After`を優先し、未指定時は指数バックオフで最大2回再試行する。
+- セッションの`AbortSignal`は待機、再試行、HTTPリクエストのすべてへ伝播する。
+- 成功したバッチだけをコミットし、一部のみ成功した場合は`partial`状態を使用する。
+
+## Webview境界
+
+- 拡張本体とWebviewの通信型は`src/webview/protocol.ts`へ集約する。
+- 受信メッセージは型ガードで検証してから処理する。
+- Webviewは`src/webview/runtimeEntry.ts`から`dist/webview.js`へ別バンドルする。
+- 初期表示データは実行可能なインラインコードへ埋め込まず、JSONとして渡す。

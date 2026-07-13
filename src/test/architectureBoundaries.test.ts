@@ -39,6 +39,7 @@ describe('architecture boundaries', () => {
   it('translation coordinator depends on contracts, not concrete adapters', () => {
     const source = fs.readFileSync(path.join(root, 'application', 'translationCoordinator.ts'), 'utf8');
     expect(source).not.toMatch(/from\s+['"][^'"]*(providers|preview|vscode)[^'"]*['"]/);
+    expect(source).not.toContain('new InMemoryTranslationCache');
   });
 
   it('keeps entrypoints, use cases, adapters, and webview code in their owned directories', () => {
@@ -61,11 +62,23 @@ describe('architecture boundaries', () => {
       'adapters/vscode/preview/previewController.ts',
       'adapters/vscode/preview/previewPanel.ts',
       'webview/protocol.ts',
+      'webview/runtimeEntry.ts',
       'webview/main.ts',
     ];
     for (const relativePath of required) {
       expect(fs.existsSync(path.join(root, relativePath))).toBe(true);
     }
+  });
+
+  it('builds the webview as a separate entrypoint instead of embedding it in the extension', () => {
+    const buildSource = fs.readFileSync(path.resolve(root, '..', 'esbuild.js'), 'utf8');
+    const htmlSource = fs.readFileSync(
+      path.join(root, 'adapters', 'vscode', 'preview', 'webviewHtml.ts'),
+      'utf8'
+    );
+    expect(buildSource).toContain("entryPoints: ['src/webview/runtimeEntry.ts']");
+    expect(buildSource).toContain("outfile: 'dist/webview.js'");
+    expect(htmlSource).not.toContain("from '../../../webview/main'");
   });
 
   it('does not restore legacy root-level architecture files', () => {

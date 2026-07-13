@@ -1,6 +1,6 @@
 import type { TranslationProvider } from '../../ports/translationProvider';
 import { ProviderConfigurationError } from '../../domain/translationError';
-import { readResponseErrorMessage, TooManyRequestsError } from './httpError';
+import { readResponseErrorMessage, readRetryAfterMilliseconds, TooManyRequestsError } from './httpError';
 import { mapLanguageCodeForProvider } from './languageCodeMapper';
 
 export class AzureRegionError extends ProviderConfigurationError {
@@ -49,7 +49,10 @@ export class MicrosoftProvider implements TranslationProvider {
         payload => payload?.error?.message,
       ]);
       if (response.status === 429) {
-        throw new TooManyRequestsError(`Azure rate limit: ${errorMsg}`);
+        throw new TooManyRequestsError(
+          `Azure rate limit: ${errorMsg}`,
+          readRetryAfterMilliseconds(response)
+        );
       }
       if (response.status === 401) {
         const lower = errorMsg.toLowerCase();

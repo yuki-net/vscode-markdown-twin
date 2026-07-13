@@ -1,6 +1,7 @@
 export type TranslationFailureKind =
   | 'authentication'
   | 'rate-limit'
+  | 'timeout'
   | 'provider'
   | 'invalid-response';
 

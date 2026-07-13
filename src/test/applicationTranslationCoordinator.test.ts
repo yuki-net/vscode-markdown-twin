@@ -3,6 +3,7 @@ import { TranslationCoordinator } from '../application/translationCoordinator';
 import { normalizeBatchSize } from '../domain/translationSettings';
 import { createTranslationCacheKey, type TranslationSpec } from '../domain/translationSpec';
 import { MissingProviderCredentialError } from '../domain/translationError';
+import { InMemoryTranslationCache } from '../application/inMemoryTranslationCache';
 const targetsByDocument = new Map<string, string[]>();
 const translationTargets = {
   hasDocument: (documentUri: string) => targetsByDocument.has(documentUri),
@@ -49,7 +50,8 @@ function createManager(factory: typeof providerFactory = providerFactory): Trans
     translationTargets,
     settingsRepository,
     factory,
-    diagnostics
+    diagnostics,
+    new InMemoryTranslationCache()
   );
 }
 
@@ -229,5 +231,27 @@ describe('TranslationCoordinator', () => {
     const translated = manager.generateTranslatedMarkdown(document, 'ko').text;
     expect(translated).toContain('new translation');
     expect(translated).not.toContain('stale translation');
+  });
+
+  it('records partial status when one target succeeds and another fails', async () => {
+    const document = {
+      id: vscode.Uri.file('/workspace/partial.md').toString(),
+      languageId: 'markdown',
+      text: 'Text to translate.',
+    };
+    targetsByDocument.set(document.id, ['ja', 'ko']);
+    provider.translate
+      .mockResolvedValueOnce(['translated'])
+      .mockRejectedValueOnce(new Error('target failed'));
+    const manager = createManager();
+
+    await expect(manager.startTranslation(document)).resolves.toBe(false);
+
+    expect(manager.getDocumentState(document.id)?.status).toMatchObject({
+      kind: 'partial',
+      failures: [{ kind: 'provider', targetLanguage: 'ko' }],
+    });
+    expect(manager.generateTranslatedMarkdown(document, 'ja').text).toContain('translated');
+    expect(manager.generateTranslatedMarkdown(document, 'ko').text).toBe(document.text);
   });
 });

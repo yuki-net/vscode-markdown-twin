@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { buildPreviewWebviewScript } from '../../../webview/main';
+import type { PreviewInitialState } from '../../../webview/protocol';
 
 export interface BuildPreviewWebviewHtmlArgs {
   previewHeaderTitle: string;
@@ -13,6 +13,7 @@ export interface BuildPreviewWebviewHtmlArgs {
   sourceHighlightError?: string;
   markdownCssUri: vscode.Uri;
   twinCssUri: vscode.Uri;
+  webviewScriptUri: vscode.Uri;
   bodyClasses: string[];
   htmlStyleVars: Record<string, string>;
   cspSource: string;
@@ -33,6 +34,7 @@ export function buildPreviewWebviewHtml(args: BuildPreviewWebviewHtmlArgs): stri
     sourceHighlightError,
     markdownCssUri,
     twinCssUri,
+    webviewScriptUri,
     bodyClasses,
     htmlStyleVars,
     cspSource,
@@ -47,21 +49,22 @@ export function buildPreviewWebviewHtml(args: BuildPreviewWebviewHtmlArgs): stri
   const styleAttr = Object.entries(htmlStyleVars)
     .map(([key, value]) => `${key}: ${value};`)
     .join(' ');
-  const script = buildPreviewWebviewScript({
+  const initialState: PreviewInitialState = {
     sourceLineCount,
     sourceLineOrigins,
     sourceLineHeight,
     initialScrollLine,
     sourceText,
-    isSource,
-  });
+    viewMode,
+  };
+  const serializedState = JSON.stringify(initialState).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
 <html lang="en" class="${classAttr}" style="${styleAttr}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; style-src-attr 'unsafe-inline'; style-src-elem ${cspSource} 'unsafe-inline'; font-src ${cspSource}; script-src 'nonce-${scriptNonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; style-src-attr 'unsafe-inline'; style-src-elem ${cspSource} 'unsafe-inline'; font-src ${cspSource}; script-src ${cspSource} 'nonce-${scriptNonce}';">
     <title>Markdown Twin Preview</title>
     <link rel="stylesheet" href="${markdownCssUri}">
     <link rel="stylesheet" href="${twinCssUri}">
@@ -88,9 +91,8 @@ export function buildPreviewWebviewHtml(args: BuildPreviewWebviewHtmlArgs): stri
         </div>
     </div>
 
-    <script nonce="${scriptNonce}">
-${script}
-    </script>
+    <script id="markdown-twin-initial-state" type="application/json">${serializedState}</script>
+    <script nonce="${scriptNonce}" src="${webviewScriptUri}"></script>
 </body>
 </html>`;
 }
