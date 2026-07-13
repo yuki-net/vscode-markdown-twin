@@ -5,6 +5,6 @@ module.exports = {
   testMatch: ['**/src/test/**/*.test.ts'],
   moduleNameMapper: {
     // VSCode APIはNode環境ではインポートできないため、モックします
-    '^vscode$': '<rootDir>/src/test/mocks/vscode.ts'
+    '^vscode$': '<rootDir>/src/test/support/mocks/vscode.ts'
   }
 };
