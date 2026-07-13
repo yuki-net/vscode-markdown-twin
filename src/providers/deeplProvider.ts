@@ -9,7 +9,7 @@ export class DeeplProvider implements ITranslationProvider {
 
   constructor(private apiKey: string) {}
 
-  async translate(texts: string[], sourceLang: string, targetLang: string): Promise<string[]> {
+  async translate(texts: string[], sourceLang: string, targetLang: string, signal?: AbortSignal): Promise<string[]> {
     if (texts.length === 0) return [];
 
     const endpoint = this.apiKey.endsWith(':fx')
@@ -28,6 +28,7 @@ export class DeeplProvider implements ITranslationProvider {
         target_lang: mapDeepLTargetLanguageCode(targetLang),
         tag_handling: 'off',
       }),
+      signal,
     });
 
     if (!response.ok) {

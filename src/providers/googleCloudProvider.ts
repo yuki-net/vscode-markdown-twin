@@ -9,7 +9,7 @@ export class GoogleCloudProvider implements ITranslationProvider {
 
   constructor(private apiKey: string) {}
 
-  async translate(texts: string[], sourceLang: string, targetLang: string): Promise<string[]> {
+  async translate(texts: string[], sourceLang: string, targetLang: string, signal?: AbortSignal): Promise<string[]> {
     if (texts.length === 0) return [];
 
     const url = `https://translation.googleapis.com/language/translate/v2?key=${this.apiKey}`;
@@ -28,6 +28,7 @@ export class GoogleCloudProvider implements ITranslationProvider {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
+      signal,
     });
 
     if (!response.ok) {

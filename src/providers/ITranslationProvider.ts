@@ -8,7 +8,8 @@ export interface ITranslationProvider {
   translate(
     texts: string[],
     sourceLang: string,
-    targetLang: string
+    targetLang: string,
+    signal?: AbortSignal
   ): Promise<string[]>;
 }
 

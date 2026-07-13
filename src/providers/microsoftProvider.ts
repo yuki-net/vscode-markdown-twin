@@ -19,7 +19,7 @@ export class MicrosoftProvider implements ITranslationProvider {
 
   constructor(private apiKey: string) {}
 
-  async translate(texts: string[], sourceLang: string, targetLang: string): Promise<string[]> {
+  async translate(texts: string[], sourceLang: string, targetLang: string, signal?: AbortSignal): Promise<string[]> {
     if (texts.length === 0) return [];
 
     const params = new URLSearchParams({
@@ -43,6 +43,7 @@ export class MicrosoftProvider implements ITranslationProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(texts.map(text => ({ Text: text }))),
+        signal,
       }
     );
 

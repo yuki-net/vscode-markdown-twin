@@ -96,16 +96,18 @@ describe('TranslationManager', () => {
     expect(apiKeyManager.getKey).not.toHaveBeenCalled();
   });
 
-  it('keeps translation session ids independent between documents', () => {
+  it('keeps translation sessions independent between documents', () => {
     const manager = new TranslationManager({} as any);
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
 
-    const firstSession = (manager as any).beginDocumentSession(first);
-    const secondSession = (manager as any).beginDocumentSession(second);
+    const firstSession = (manager as any).ensureDocumentSession(first);
+    const secondSession = (manager as any).ensureDocumentSession(second);
+    const firstRun = firstSession.begin();
+    const secondRun = secondSession.begin();
 
-    expect((manager as any).isCurrentDocumentSession(first, firstSession)).toBe(true);
-    expect((manager as any).isCurrentDocumentSession(second, secondSession)).toBe(true);
+    expect(firstSession.isCurrent(firstRun)).toBe(true);
+    expect(secondSession.isCurrent(secondRun)).toBe(true);
   });
 
   it('stops one document without deactivating another document', () => {

@@ -17,16 +17,16 @@ export class PapagoProvider implements ITranslationProvider {
     this.clientSecret = secret ?? '';
   }
 
-  async translate(texts: string[], sourceLang: string, targetLang: string): Promise<string[]> {
+  async translate(texts: string[], sourceLang: string, targetLang: string, signal?: AbortSignal): Promise<string[]> {
     if (texts.length === 0) return [];
 
     // Papagoは1リクエスト1テキストなので、Promise.allで並列化する。
     return Promise.all(
-      texts.map(text => this.translateOne(text, sourceLang, targetLang))
+      texts.map(text => this.translateOne(text, sourceLang, targetLang, signal))
     );
   }
 
-  private async translateOne(text: string, sourceLang: string, targetLang: string): Promise<string> {
+  private async translateOne(text: string, sourceLang: string, targetLang: string, signal?: AbortSignal): Promise<string> {
     const response = await fetch('https://naveropenapi.apigw.ntruss.com/nmt/v1/translation', {
       method: 'POST',
       headers: {
@@ -39,6 +39,7 @@ export class PapagoProvider implements ITranslationProvider {
         target: mapLanguageCodeForProvider(this.id, targetLang),
         text,
       }),
+      signal,
     });
 
     if (!response.ok) {
