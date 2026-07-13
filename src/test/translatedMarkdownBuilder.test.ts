@@ -2,12 +2,6 @@ import MarkdownIt from 'markdown-it';
 import { buildTranslatedMarkdown } from '../translatedMarkdownBuilder';
 import { createMarkdownPreviewEngine } from '../preview/markdownEngine';
 
-function createDocument(text: string): any {
-  return {
-    getText: () => text,
-  };
-}
-
 describe('buildTranslatedMarkdown', () => {
   it('keeps markdown table structure when translating cell contents', () => {
     const source = [
@@ -17,7 +11,7 @@ describe('buildTranslatedMarkdown', () => {
     ].join('\n');
 
     const translated = buildTranslatedMarkdown({
-      document: createDocument(source),
+      source,
       langCode: 'ko',
       mode: 'translation-only',
       md: new MarkdownIt(),
@@ -48,7 +42,7 @@ describe('buildTranslatedMarkdown', () => {
     ].join('\n');
 
     const translated = buildTranslatedMarkdown({
-      document: createDocument(source),
+      source,
       langCode: 'ko',
       mode: 'translation-only',
       md: new MarkdownIt(),
@@ -64,7 +58,7 @@ describe('buildTranslatedMarkdown', () => {
 
   it('renders bilingual paragraphs with translation first and original as a secondary block', () => {
     const translated = buildTranslatedMarkdown({
-      document: createDocument('Original sentence.'),
+      source: 'Original sentence.',
       langCode: 'ko',
       mode: 'bilingual',
       md: new MarkdownIt(),
@@ -82,7 +76,7 @@ describe('buildTranslatedMarkdown', () => {
 
   it('renders bilingual headings with the same heading level for the original text', () => {
     const translated = buildTranslatedMarkdown({
-      document: createDocument('## Original heading'),
+      source: '## Original heading',
       langCode: 'ko',
       mode: 'bilingual',
       md: new MarkdownIt(),
@@ -100,7 +94,7 @@ describe('buildTranslatedMarkdown', () => {
 
   it('renders bilingual table cells with translation first and original as inline secondary text', () => {
     const translated = buildTranslatedMarkdown({
-      document: createDocument('| Key | Value |\n|---|---|\n| concept | pending |'),
+      source: '| Key | Value |\n|---|---|\n| concept | pending |',
       langCode: 'ko',
       mode: 'bilingual',
       md: new MarkdownIt(),

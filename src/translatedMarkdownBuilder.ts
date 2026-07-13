@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import { EXCLUDED_TOKEN_TYPES } from './languageDetector';
 
@@ -18,7 +17,7 @@ type Replacement = {
 };
 
 interface BuildTranslatedMarkdownArgs {
-  document: vscode.TextDocument;
+  source: string;
   langCode: string;
   mode: TranslationViewMode;
   md: MarkdownIt;
@@ -26,8 +25,7 @@ interface BuildTranslatedMarkdownArgs {
 }
 
 export function buildTranslatedMarkdown(args: BuildTranslatedMarkdownArgs): TranslatedMarkdownResult {
-  const { document, langCode, mode, md, getTranslation } = args;
-  const originalText = document.getText();
+  const { source: originalText, langCode, mode, md, getTranslation } = args;
   const lineOffsets = buildLineOffsets(originalText);
 
   const replacements = collectInlineReplacements(

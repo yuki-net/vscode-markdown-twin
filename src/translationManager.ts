@@ -14,7 +14,7 @@ import { shouldTranslate, splitTranslatableParts, joinTranslatedParts, EXCLUDED_
 import { resolveSourceLanguageCode } from './languages';
 import { t } from './i18n';
 import { buildTranslatedMarkdown, type TranslatedMarkdownResult, type TranslationViewMode } from './translatedMarkdownBuilder';
-import { createTranslationProvider } from './providers/providerFactory';
+import { createTranslationProvider } from './providers/providerRegistry';
 import { TranslationCache } from './translationCache';
 import { DocumentTranslationSession, type TranslationRun } from './application/documentTranslationSession';
 import type { TranslationTargetRegistry } from './ports/translationTargetRegistry';
@@ -424,7 +424,7 @@ export class TranslationManager implements vscode.Disposable {
     }
 
     return buildTranslatedMarkdown({
-      document,
+      source: document.getText(),
       langCode,
       mode,
       md: this.md,

@@ -17,6 +17,7 @@ import { t } from './i18n';
 import { retranslateActivePreview } from './previewActions';
 import { getAzureRegion, promptAzureRegion } from './azureRegion';
 import { PreviewRegistry } from './previewRegistry';
+import { PROVIDER_DEFINITIONS } from './providers/providerRegistry';
 
 interface ProviderItem extends vscode.QuickPickItem {
   id: ProviderId;
@@ -24,13 +25,6 @@ interface ProviderItem extends vscode.QuickPickItem {
   requiresKey: boolean;
   hasKey: boolean;
 }
-
-export const PROVIDER_DEFS: Array<{ id: ProviderId; displayName: string; requiresKey: boolean }> = [
-  { id: 'google-cloud', displayName: 'Google Cloud', requiresKey: true },
-  { id: 'microsoft', displayName: 'Azure', requiresKey: true },
-  { id: 'deepl', displayName: 'DeepL', requiresKey: true },
-  { id: 'papago', displayName: 'Papago', requiresKey: true },
-];
 
 export class ProviderSelector {
   constructor(
@@ -227,7 +221,7 @@ export class ProviderSelector {
   }
 
   private async _deleteApiKey(): Promise<void> {
-    const keyProviders = PROVIDER_DEFS.filter(p => p.requiresKey);
+    const keyProviders = PROVIDER_DEFINITIONS.filter(p => p.requiresKey);
 
     const withKeys = await Promise.all(
       keyProviders.map(async p => {
@@ -261,7 +255,7 @@ export class ProviderSelector {
   }
 
   private async _buildProviderItems(currentId: ProviderId): Promise<ProviderItem[]> {
-    return Promise.all(PROVIDER_DEFS.map(async p => {
+    return Promise.all(PROVIDER_DEFINITIONS.map(async p => {
       const key = await this.apiKeyManager.getKey(p.id);
       let description = key ? t('apiKeyConfigured') : t('apiKeyNotConfigured');
       if (currentId === p.id) {

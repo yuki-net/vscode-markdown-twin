@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { TranslationManager } from './translationManager';
 import { StatusBar } from './statusBar';
 import { ApiKeyManager } from './apiKeyManager';
-import { ProviderSelector, PROVIDER_DEFS } from './providerSelector';
+import { ProviderSelector } from './providerSelector';
 import { normalizeProviderId } from './providers/ITranslationProvider';
 import {
   SUPPORTED_LANGUAGES,
@@ -18,6 +18,7 @@ import { promptAzureRegion } from './azureRegion';
 import { TextMateHighlightService } from './preview/highlighting/textMateHighlightService';
 import { PreviewRegistry } from './previewRegistry';
 import { TranslationCoordinator } from './application/translationCoordinator';
+import { PROVIDER_DEFINITIONS } from './providers/providerRegistry';
 
 let translationCoordinator: TranslationCoordinator;
 
@@ -394,7 +395,7 @@ function registerFirstRunApiKeyPrompt(services: ExtensionServices): void {
       if (firstRunChecked || doc.languageId !== 'markdown') return;
       firstRunChecked = true;
 
-      const allProviderIds = PROVIDER_DEFS.filter(p => p.requiresKey).map(p => p.id);
+      const allProviderIds = PROVIDER_DEFINITIONS.filter(p => p.requiresKey).map(p => p.id);
       const keys = await Promise.all(allProviderIds.map(id => apiKeyManager.getKey(id)));
       const anyKey = keys.some(k => !!k);
       if (!anyKey) {
