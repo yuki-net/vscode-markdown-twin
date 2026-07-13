@@ -6,6 +6,7 @@ import { t } from './i18n';
 type TranslationMode = 'translation-only' | 'bilingual';
 
 interface DocumentProgress {
+  kind: 'progress';
   uri: vscode.Uri;
   label: string;
   providerName: string;
@@ -14,16 +15,27 @@ interface DocumentProgress {
 }
 
 interface CompletedDocument {
+  kind: 'complete';
   uri: vscode.Uri;
   mode: TranslationMode;
   providerName: string;
+  order: number;
 }
+
+interface DocumentError {
+  kind: 'error';
+  uri: vscode.Uri;
+  providerName: string;
+  order: number;
+}
+
+type DocumentStatus = DocumentProgress | CompletedDocument | DocumentError;
 
 export class StatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
   private activeProviderId: string | null = null;
-  private readonly progressByDocument = new Map<string, DocumentProgress>();
-  private lastCompleted: CompletedDocument | undefined;
+  private readonly statusByDocument = new Map<string, DocumentStatus>();
+  private nextOrder = 0;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(
@@ -55,17 +67,15 @@ export class StatusBar implements vscode.Disposable {
     total: number
   ): void {
     const uriStr = documentUri.toString();
-    this.progressByDocument.set(uriStr, {
+    this.statusByDocument.set(uriStr, {
+      kind: 'progress',
       uri: documentUri,
       label: this.documentLabel(documentUri),
       providerName,
       done,
       total,
     });
-    if (this.lastCompleted?.uri.toString() === uriStr) {
-      this.lastCompleted = undefined;
-    }
-    this.renderProgress();
+    this.render();
   }
 
   showComplete(
@@ -73,17 +83,14 @@ export class StatusBar implements vscode.Disposable {
     mode: TranslationMode,
     providerName: string
   ): void {
-    this.progressByDocument.delete(documentUri.toString());
-    this.lastCompleted = {
+    this.statusByDocument.set(documentUri.toString(), {
+      kind: 'complete',
       uri: documentUri,
       mode,
       providerName,
-    };
-    if (this.progressByDocument.size > 0) {
-      this.renderProgress();
-      return;
-    }
-    this.renderComplete(this.lastCompleted);
+      order: this.nextOrder++,
+    });
+    this.render();
   }
 
   private renderComplete(completed: CompletedDocument): void {
@@ -98,8 +105,11 @@ export class StatusBar implements vscode.Disposable {
   }
 
   showOffline(): void {
-    this.progressByDocument.clear();
-    this.lastCompleted = undefined;
+    this.statusByDocument.clear();
+    this.renderOffline();
+  }
+
+  private renderOffline(): void {
     const targetCode = this.selectedTargetCode();
     const providerName = this.resolveProviderName();
     this.item.text = `$(globe) Twin: ${providerName} (${targetCode})`;
@@ -108,39 +118,56 @@ export class StatusBar implements vscode.Disposable {
   }
 
   update(mode: TranslationMode): void {
-    if (!this.lastCompleted || this.progressByDocument.size > 0) return;
-    this.lastCompleted.mode = mode;
-    this.renderComplete(this.lastCompleted);
+    for (const status of this.statusByDocument.values()) {
+      if (status.kind === 'complete') status.mode = mode;
+    }
+    this.render();
   }
 
-  showError(documentUri?: vscode.Uri): void {
-    if (documentUri) {
-      this.progressByDocument.delete(documentUri.toString());
-      if (this.progressByDocument.size > 0) {
-        this.renderProgress();
-        return;
-      }
-    }
-    const providerName = this.resolveProviderName();
-    this.item.text = t('statusErrorText', providerName);
-    this.item.tooltip = t('statusErrorTooltip');
-    this.item.show();
+  showError(documentUri: vscode.Uri, providerName: string): void {
+    this.statusByDocument.set(documentUri.toString(), {
+      kind: 'error',
+      uri: documentUri,
+      providerName,
+      order: this.nextOrder++,
+    });
+    this.render();
   }
 
   removeDocument(documentUri: vscode.Uri): void {
     const uriStr = documentUri.toString();
-    this.progressByDocument.delete(uriStr);
-    if (this.lastCompleted?.uri.toString() === uriStr) {
-      this.lastCompleted = undefined;
-    }
-    if (this.progressByDocument.size > 0) {
-      this.renderProgress();
-    }
+    this.statusByDocument.delete(uriStr);
+    this.render();
   }
 
-  private renderProgress(): void {
-    const entries = Array.from(this.progressByDocument.values());
-    if (entries.length === 0) return;
+  private render(): void {
+    const statuses = Array.from(this.statusByDocument.values());
+    const progress = statuses.filter((status): status is DocumentProgress => status.kind === 'progress');
+    if (progress.length > 0) {
+      this.renderProgress(progress);
+      return;
+    }
+
+    const documentErrors = statuses.filter((status): status is DocumentError => status.kind === 'error');
+    const latestDocumentError = this.latestByOrder(documentErrors);
+    if (latestDocumentError) {
+      this.item.text = t('statusErrorText', latestDocumentError.providerName);
+      this.item.tooltip = t('statusErrorTooltip');
+      this.item.show();
+      return;
+    }
+
+    const completed = statuses.filter((status): status is CompletedDocument => status.kind === 'complete');
+    const latestCompleted = this.latestByOrder(completed);
+    if (latestCompleted) {
+      this.renderComplete(latestCompleted);
+      return;
+    }
+
+    this.renderOffline();
+  }
+
+  private renderProgress(entries: DocumentProgress[]): void {
     const targetCode = this.selectedTargetCode();
 
     if (entries.length === 1) {
@@ -175,6 +202,13 @@ export class StatusBar implements vscode.Disposable {
     return total > 0 ? Math.round((done / total) * 100) : 0;
   }
 
+  private latestByOrder<T extends { order: number }>(entries: T[]): T | undefined {
+    return entries.reduce<T | undefined>(
+      (latest, entry) => !latest || entry.order > latest.order ? entry : latest,
+      undefined
+    );
+  }
+
   private selectedTargetCode(): string {
     const config = vscode.workspace.getConfiguration('markdownTwin');
     const targetLang = normalizeTargetLanguageCode(config.get<string>('targetLanguage'));
@@ -192,7 +226,7 @@ export class StatusBar implements vscode.Disposable {
   }
 
   dispose(): void {
-    this.progressByDocument.clear();
+    this.statusByDocument.clear();
     this.item.dispose();
   }
 }

@@ -150,14 +150,14 @@ export class TranslationManager implements vscode.Disposable {
       const key = await this.apiKeyManager.getKey(providerId);
       if (!key) {
         this.logError(t('apiKeyNotSetForProvider', providerName), undefined, false);
-        this.statusBar?.showError(document.uri);
+        this.statusBar?.showError(document.uri, providerName);
         return this.failStartTranslation(document.uri, sessionId);
       }
     }
 
     const provider = await createTranslationProvider(providerId, this.apiKeyManager);
     if (!provider) {
-      this.statusBar?.showError(document.uri);
+      this.statusBar?.showError(document.uri, providerName);
       return this.failStartTranslation(document.uri, sessionId);
     }
     if (!this.isCurrentDocumentSession(document.uri, sessionId)) {
@@ -262,7 +262,7 @@ export class TranslationManager implements vscode.Disposable {
             const timestamp = new Date().toLocaleTimeString();
             this.outputChannel.appendLine(`[${timestamp}] [ERROR] ${err.message}`);
             fatalError = true;
-            this.statusBar?.showError(documentUri);
+            this.statusBar?.showError(documentUri, providerName);
             const action = await vscode.window.showErrorMessage(
               t('azureRegionError', err.region ?? 'unknown'),
               t('openSettings')
@@ -272,7 +272,7 @@ export class TranslationManager implements vscode.Disposable {
             }
           } else if (err instanceof TooManyRequestsError) {
             this.logWarning(t('rateLimitReached'));
-            this.statusBar?.showError(documentUri);
+            this.statusBar?.showError(documentUri, providerName);
             for (const text of batch) {
               docCache.set(text, text);
             }
