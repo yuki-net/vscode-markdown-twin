@@ -1,11 +1,23 @@
 import * as vscode from 'vscode';
-import { normalizeBatchSize, TranslationManager } from '../translationManager';
+import { TranslationManager } from '../translationManager';
+import { normalizeBatchSize } from '../domain/translationSettings';
 import { createTranslationCacheKey, type TranslationSpec } from '../domain/translationSpec';
 const targetsByDocument = new Map<string, string[]>();
 const translationTargets = {
   hasDocument: (documentUri: string) => targetsByDocument.has(documentUri),
   getTargetLanguages: (documentUri: string) => targetsByDocument.get(documentUri) ?? [],
   getDocumentUris: () => [...targetsByDocument.keys()],
+};
+const settingsRepository = {
+  get: () => ({
+    providerId: 'google-cloud' as const,
+    sourceLanguage: 'auto',
+    batchSize: 10,
+    debounceDelayMs: 2000,
+    defaultMode: 'translation-only' as const,
+    azureRegion: 'global',
+  }),
+  updateDefaultMode: jest.fn(async () => undefined),
 };
 
 describe('TranslationManager', () => {
@@ -23,27 +35,19 @@ describe('TranslationManager', () => {
   });
 
   it('persists mode changes to the defaultMode setting', async () => {
-    const manager = new TranslationManager({} as any, translationTargets);
+    const manager = new TranslationManager({} as any, translationTargets, settingsRepository);
 
     await manager.toggleMode();
 
-    expect(vscode.workspace.getConfiguration('markdownTwin').update).toHaveBeenCalledWith(
-      'defaultMode',
-      'Bilingual',
-      vscode.ConfigurationTarget.Global
-    );
+    expect(settingsRepository.updateDefaultMode).toHaveBeenCalledWith('bilingual');
 
     await manager.toggleMode();
 
-    expect(vscode.workspace.getConfiguration('markdownTwin').update).toHaveBeenCalledWith(
-      'defaultMode',
-      'Translation Only',
-      vscode.ConfigurationTarget.Global
-    );
+    expect(settingsRepository.updateDefaultMode).toHaveBeenCalledWith('translation-only');
   });
 
   it('can generate clean translated markdown even when the current mode is bilingual', async () => {
-    const manager = new TranslationManager({} as any, translationTargets);
+    const manager = new TranslationManager({} as any, translationTargets, settingsRepository);
     const document = {
       uri: vscode.Uri.file('/workspace/requirements.md'),
       getText: () => '原文です。',
@@ -73,7 +77,7 @@ describe('TranslationManager', () => {
     const apiKeyManager = {
       getKey: jest.fn(() => Promise.resolve(undefined)),
     };
-    const manager = new TranslationManager(apiKeyManager as any, translationTargets);
+    const manager = new TranslationManager(apiKeyManager as any, translationTargets, settingsRepository);
     const document = {
       uri: vscode.Uri.file('/workspace/requirements.md'),
       languageId: 'markdown',
@@ -95,7 +99,7 @@ describe('TranslationManager', () => {
     const apiKeyManager = {
       getKey: jest.fn(() => Promise.resolve('secret')),
     };
-    const manager = new TranslationManager(apiKeyManager as any, translationTargets);
+    const manager = new TranslationManager(apiKeyManager as any, translationTargets, settingsRepository);
     const document = {
       uri: vscode.Uri.file('/workspace/closed.md'),
       languageId: 'markdown',
@@ -107,7 +111,7 @@ describe('TranslationManager', () => {
   });
 
   it('keeps translation sessions independent between documents', () => {
-    const manager = new TranslationManager({} as any, translationTargets);
+    const manager = new TranslationManager({} as any, translationTargets, settingsRepository);
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
 
@@ -121,7 +125,7 @@ describe('TranslationManager', () => {
   });
 
   it('stops one document without deactivating another document', () => {
-    const manager = new TranslationManager({} as any, translationTargets);
+    const manager = new TranslationManager({} as any, translationTargets, settingsRepository);
     const first = vscode.Uri.file('/workspace/first.md');
     const second = vscode.Uri.file('/workspace/second.md');
     (manager as any).activeDocumentUris.add(first.toString());

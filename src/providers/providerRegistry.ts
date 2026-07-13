@@ -5,11 +5,15 @@ import type { ITranslationProvider, ProviderId } from './ITranslationProvider';
 import { MicrosoftProvider } from './microsoftProvider';
 import { PapagoProvider } from './papagoProvider';
 
+export interface ProviderOptions {
+  readonly azureRegion: string;
+}
+
 export interface ProviderDefinition {
   readonly id: ProviderId;
   readonly displayName: string;
   readonly requiresKey: boolean;
-  create(apiKey: string): ITranslationProvider;
+  create(apiKey: string, options: ProviderOptions): ITranslationProvider;
 }
 
 export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
@@ -23,7 +27,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     id: 'microsoft',
     displayName: 'Azure',
     requiresKey: true,
-    create: apiKey => new MicrosoftProvider(apiKey),
+    create: (apiKey, options) => new MicrosoftProvider(apiKey, options.azureRegion),
   },
   {
     id: 'deepl',
@@ -41,11 +45,12 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
 
 export async function createTranslationProvider(
   id: ProviderId,
-  apiKeyManager: ApiKeyManager
+  apiKeyManager: ApiKeyManager,
+  options: ProviderOptions
 ): Promise<ITranslationProvider | null> {
   const definition = PROVIDER_DEFINITIONS.find(provider => provider.id === id);
   if (!definition) return null;
 
   const apiKey = await apiKeyManager.getKey(id) ?? '';
-  return definition.create(apiKey);
+  return definition.create(apiKey, options);
 }

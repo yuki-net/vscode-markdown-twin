@@ -9,9 +9,7 @@ import {
 import { AzureRegionError } from './providers/microsoftProvider';
 import { TooManyRequestsError } from './providers/httpError';
 import { ApiKeyManager } from './apiKeyManager';
-import { StatusBar } from './statusBar';
 import { shouldTranslate, splitTranslatableParts, joinTranslatedParts, EXCLUDED_TOKEN_TYPES } from './languageDetector';
-import { resolveSourceLanguageCode } from './languages';
 import { t } from './i18n';
 import { buildTranslatedMarkdown, type TranslatedMarkdownResult, type TranslationViewMode } from './translatedMarkdownBuilder';
 import { createTranslationProvider } from './providers/providerRegistry';
@@ -19,12 +17,15 @@ import { TranslationCache } from './translationCache';
 import { DocumentTranslationSession, type TranslationRun } from './application/documentTranslationSession';
 import type { TranslationTargetRegistry } from './ports/translationTargetRegistry';
 import { createTranslationCacheKey, type TranslationSpec } from './domain/translationSpec';
+import type { TranslationSettingsRepository } from './ports/translationSettingsRepository';
+import type { TranslationStatusSink } from './ports/translationStatusSink';
+import { normalizeBatchSize } from './domain/translationSettings';
 
 export class TranslationManager implements vscode.Disposable {
   private cache = new TranslationCache();
   private activeDocumentUris = new Set<string>();
   private currentMode: TranslationViewMode = 'translation-only';
-  private statusBar: StatusBar | null = null;
+  private statusBar: TranslationStatusSink | null = null;
   private md = new MarkdownIt();
   private translationSessions = new Map<string, DocumentTranslationSession>();
   private documentSpecs = new Map<string, TranslationSpec>();
@@ -35,11 +36,10 @@ export class TranslationManager implements vscode.Disposable {
 
   constructor(
     private apiKeyManager: ApiKeyManager,
-    private translationTargets: TranslationTargetRegistry
+    private translationTargets: TranslationTargetRegistry,
+    private settings: TranslationSettingsRepository
   ) {
-    const config = vscode.workspace.getConfiguration('markdownTwin');
-    const rawMode = config.get<string>('defaultMode') ?? 'Translation Only';
-    this.currentMode = rawMode === 'Bilingual' ? 'bilingual' : 'translation-only';
+    this.currentMode = settings.get().defaultMode;
     this.logInfo('Markdown Twin active.');
   }
 
@@ -71,7 +71,7 @@ export class TranslationManager implements vscode.Disposable {
     this.onTranslationUpdatedEmitter.dispose();
   }
 
-  setStatusBar(statusBar: StatusBar) {
+  setStatusBar(statusBar: TranslationStatusSink) {
     this.statusBar = statusBar;
   }
 
@@ -89,10 +89,7 @@ export class TranslationManager implements vscode.Disposable {
 
   async toggleMode(): Promise<void> {
     this.currentMode = this.currentMode === 'translation-only' ? 'bilingual' : 'translation-only';
-    const configValue = this.currentMode === 'bilingual' ? 'Bilingual' : 'Translation Only';
-    await vscode.workspace
-      .getConfiguration('markdownTwin')
-      .update('defaultMode', configValue, vscode.ConfigurationTarget.Global);
+    await this.settings.updateDefaultMode(this.currentMode);
     this.statusBar?.update(this.currentMode);
     this.onTranslationUpdatedEmitter.fire(undefined);
   }
@@ -139,19 +136,19 @@ export class TranslationManager implements vscode.Disposable {
     const session = this.ensureDocumentSession(document.uri);
     const run = session.begin();
 
-    const config = vscode.workspace.getConfiguration('markdownTwin');
-    const providerId = normalizeProviderId(overrideProvider ?? config.get<string>('provider'));
+    const settings = this.settings.get();
+    const providerId = normalizeProviderId(overrideProvider ?? settings.providerId);
     const providerName = PROVIDER_DISPLAY_NAMES[providerId] ?? providerId;
     this.statusBar?.setActiveProvider(providerId);
 
-    const sourceLang = resolveSourceLanguageCode(config.get<string>('sourceLanguage') ?? 'auto');
-    const batchSize = normalizeBatchSize(config.get<number>('batchSize'));
+    const sourceLang = settings.sourceLanguage;
+    const batchSize = settings.batchSize;
     const spec: TranslationSpec = {
       providerId,
       sourceLanguage: sourceLang,
       targetLanguages: targetLangs,
       providerOptionsKey: providerId === 'microsoft'
-        ? `region:${config.get<string>('azureRegion') ?? 'global'}`
+        ? `region:${settings.azureRegion}`
         : 'default',
     };
 
@@ -168,7 +165,9 @@ export class TranslationManager implements vscode.Disposable {
       }
     }
 
-    const provider = await createTranslationProvider(providerId, this.apiKeyManager);
+    const provider = await createTranslationProvider(providerId, this.apiKeyManager, {
+      azureRegion: settings.azureRegion,
+    });
     if (!provider) {
       this.statusBar?.showError(document.uri, providerName);
       return this.failStartTranslation(document.uri, session, run);
@@ -343,7 +342,7 @@ export class TranslationManager implements vscode.Disposable {
         clearTimeout(existing);
       }
 
-      const delay = (vscode.workspace.getConfiguration('markdownTwin').get<number>('debounceDelay') ?? 2) * 1000;
+      const delay = this.settings.get().debounceDelayMs;
       const timer = setTimeout(() => {
         this.debounceTimers.delete(uriStr);
         const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uriStr);
@@ -459,12 +458,4 @@ export class TranslationManager implements vscode.Disposable {
     });
   }
 
-}
-
-export function normalizeBatchSize(value: number | undefined): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 10;
-  }
-
-  return Math.max(1, Math.floor(value));
 }

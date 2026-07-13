@@ -1,5 +1,4 @@
 import { ITranslationProvider } from './ITranslationProvider';
-import * as vscode from 'vscode';
 import { readResponseErrorMessage, TooManyRequestsError } from './httpError';
 import { mapLanguageCodeForProvider } from './languageCodeMapper';
 
@@ -17,7 +16,7 @@ export class MicrosoftProvider implements ITranslationProvider {
   readonly name = 'Azure Translator';
   readonly requiresApiKey = true;
 
-  constructor(private apiKey: string) {}
+  constructor(private apiKey: string, private region = 'global') {}
 
   async translate(texts: string[], sourceLang: string, targetLang: string, signal?: AbortSignal): Promise<string[]> {
     if (texts.length === 0) return [];
@@ -30,16 +29,13 @@ export class MicrosoftProvider implements ITranslationProvider {
       params.set('from', mapLanguageCodeForProvider(this.id, sourceLang));
     }
 
-    const config = vscode.workspace.getConfiguration('markdownTwin');
-    const region = config.get<string>('azureRegion') ?? 'global';
-
     const response = await fetch(
       `https://api.cognitive.microsofttranslator.com/translate?${params}`,
       {
         method: 'POST',
         headers: {
           'Ocp-Apim-Subscription-Key': this.apiKey,
-          'Ocp-Apim-Subscription-Region': region,
+          'Ocp-Apim-Subscription-Region': this.region,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(texts.map(text => ({ Text: text }))),
@@ -57,7 +53,7 @@ export class MicrosoftProvider implements ITranslationProvider {
       if (response.status === 401) {
         const lower = errorMsg.toLowerCase();
         if (lower.includes('endpoint') || lower.includes('regional')) {
-          throw new AzureRegionError(region);
+          throw new AzureRegionError(this.region);
         }
       }
       throw new Error(`Azure translation failed (${response.status}): ${errorMsg}`);

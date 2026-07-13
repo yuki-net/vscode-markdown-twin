@@ -19,6 +19,7 @@ import { TextMateHighlightService } from './preview/highlighting/textMateHighlig
 import { PreviewRegistry } from './previewRegistry';
 import { TranslationCoordinator } from './application/translationCoordinator';
 import { PROVIDER_DEFINITIONS } from './providers/providerRegistry';
+import { VscodeTranslationSettingsRepository } from './vscodeTranslationSettingsRepository';
 
 let translationCoordinator: TranslationCoordinator;
 
@@ -135,7 +136,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const apiKeyManager = new ApiKeyManager(context.secrets);
   const previewRegistry = new PreviewRegistry();
-  const translationManager = new TranslationManager(apiKeyManager, previewRegistry);
+  const settingsRepository = new VscodeTranslationSettingsRepository();
+  const translationManager = new TranslationManager(apiKeyManager, previewRegistry, settingsRepository);
   context.subscriptions.push(translationManager);
   translationCoordinator = new TranslationCoordinator(translationManager, previewRegistry);
 
