@@ -31,6 +31,24 @@ describe('VS Code event bindings', () => {
     );
   });
 
+  it('recreates a target preview from the retained panel document after the source editor closes', async () => {
+    let configurationListener!: (change: TranslationSettingsChange) => Promise<void>;
+    const retained = { uri: vscode.Uri.file('/workspace/retained.md'), languageId: 'markdown' } as any;
+    const services = createServices(listener => { configurationListener = listener; });
+    services.previewRegistry.getDocumentUris.mockReturnValue([retained.uri.toString()] as any);
+    services.previewRegistry.getDocument.mockReturnValue(retained);
+
+    bindVscodeEvents(services as any);
+    await configurationListener({ affects: key => key === 'targetLanguage' });
+
+    expect(services.previewRegistry.createOrShow).toHaveBeenCalledWith(
+      services.context.extensionUri,
+      retained,
+      { avoidOpeningSource: true }
+    );
+    expect(services.coordinator.rerunAll).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['sourceLanguage', 'providerId', 'azureRegion'] as const)(
     'clears cache once and reruns all documents when %s changes',
     async changedKey => {
@@ -67,6 +85,7 @@ function createServices(
     statusBar: { showOffline: jest.fn() },
     previewRegistry: {
       getDocumentUris: jest.fn(() => []),
+      getDocument: jest.fn(),
       createOrShow: jest.fn(async () => true),
       findForDocument: jest.fn(() => []),
       setCurrentPanel: jest.fn(),

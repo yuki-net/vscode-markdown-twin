@@ -35,6 +35,7 @@ describe('TranslationCoordinator', () => {
       hasDocument: jest.fn(() => true),
       getTargetLanguages: jest.fn(() => ['ko']),
       getDocumentUris: jest.fn(() => [first.uri.toString(), second.uri.toString()]),
+      getDocument: jest.fn((uri: string) => uri === first.uri.toString() ? first : second),
     };
     const coordinator = new VscodeTranslationCoordinator(manager as any, targets);
 
@@ -54,17 +55,27 @@ describe('TranslationCoordinator', () => {
     }, undefined);
   });
 
-  it('does not rerun documents that are no longer open', async () => {
+  it('reruns a document retained by a preview after its source editor is closed', async () => {
+    const retained = {
+      uri: vscode.Uri.file('/workspace/closed.md'),
+      languageId: 'markdown',
+      getText: () => 'retained preview text',
+    } as any;
     const manager = createManager();
     const targets = {
       hasDocument: jest.fn(() => true),
       getTargetLanguages: jest.fn(() => ['ko']),
-      getDocumentUris: jest.fn(() => ['file:///closed.md']),
+      getDocumentUris: jest.fn(() => [retained.uri.toString()]),
+      getDocument: jest.fn(() => retained),
     };
     const coordinator = new VscodeTranslationCoordinator(manager as any, targets);
 
     await coordinator.rerunAll();
 
-    expect(manager.startTranslation).not.toHaveBeenCalled();
+    expect(manager.startTranslation).toHaveBeenCalledWith({
+      id: retained.uri.toString(),
+      languageId: 'markdown',
+      text: 'retained preview text',
+    }, undefined);
   });
 });

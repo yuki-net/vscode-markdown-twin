@@ -12,6 +12,10 @@ export interface RunTranslationOptions {
   overrideProvider?: ProviderId;
 }
 
+interface VscodeTranslationTargetRegistry extends TranslationTargetRegistry {
+  getDocument(documentUri: string): vscode.TextDocument | undefined;
+}
+
 /** Single command gateway for translation state changes. */
 export class VscodeTranslationCoordinator implements vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.Uri | undefined>();
@@ -21,7 +25,7 @@ export class VscodeTranslationCoordinator implements vscode.Disposable {
 
   constructor(
     private readonly service: TranslationCoordinator,
-    private readonly targets: TranslationTargetRegistry
+    private readonly targets: VscodeTranslationTargetRegistry
   ) {
     this.serviceSubscription = service.onTranslationUpdated(documentId => {
       this.changeEmitter.fire(documentId ? vscode.Uri.parse(documentId) : undefined);
@@ -51,7 +55,8 @@ export class VscodeTranslationCoordinator implements vscode.Disposable {
     }
 
     const documents = this.targets.getDocumentUris()
-      .map(uri => vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri))
+      .map(uri => vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri)
+        ?? this.targets.getDocument(uri))
       .filter((document): document is vscode.TextDocument => document !== undefined);
     let nextIndex = 0;
     const worker = async (): Promise<void> => {

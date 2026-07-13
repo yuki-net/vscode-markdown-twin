@@ -15,7 +15,11 @@ export class VscodeSettingsRepository implements TranslationSettingsRepository {
     return vscode.workspace.onDidChangeConfiguration(event => {
       const change: TranslationSettingsChange = {
         affects: (key: TranslationSettingKey) => {
-          const configKey = key === 'debounceDelayMs' ? 'debounceDelay' : key;
+          const configKey = key === 'debounceDelayMs'
+            ? 'debounceDelay'
+            : key === 'providerId'
+              ? 'provider'
+              : key;
           return event.affectsConfiguration(`markdownTwin.${configKey}`);
         },
       };

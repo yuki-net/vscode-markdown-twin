@@ -66,6 +66,10 @@ export class PreviewRegistry implements TranslationTargetRegistry {
     ))];
   }
 
+  getDocument(documentUri: string): vscode.TextDocument | undefined {
+    return this.findForDocument(documentUri)[0]?.editorDocument;
+  }
+
   setCurrentPanel(panel: PreviewPanel | undefined): void {
     this.currentPanel = panel;
     this.syncActiveContexts();

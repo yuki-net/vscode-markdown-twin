@@ -28,6 +28,23 @@ describe('ResilientTranslationProvider', () => {
     expect(translate).toHaveBeenCalledTimes(2);
   });
 
+  it('does not retry a non-atomic provider batch after a rate limit response', async () => {
+    const translate = jest.fn()
+      .mockRejectedValue(new ProviderRateLimitError('slow down', 0));
+    const provider = new ResilientTranslationProvider(
+      {
+        ...createProvider(translate),
+        rateLimitRetryMode: 'none',
+      },
+      new ProviderConcurrencyGate(1),
+      { timeoutMs: 100, maxRetries: 2, baseRetryDelayMs: 1 }
+    );
+
+    await expect(provider.translate(['text'], 'en', 'ja', new AbortController().signal))
+      .rejects.toBeInstanceOf(ProviderRateLimitError);
+    expect(translate).toHaveBeenCalledTimes(1);
+  });
+
   it('fails a provider call that exceeds the timeout', async () => {
     const provider = new ResilientTranslationProvider(
       createProvider(jest.fn(() => new Promise(() => undefined))),

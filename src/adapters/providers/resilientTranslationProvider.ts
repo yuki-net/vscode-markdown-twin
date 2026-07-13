@@ -97,7 +97,11 @@ export class ResilientTranslationProvider implements TranslationProvider {
           return await this.runAttempt(texts, sourceLanguage, targetLanguage, signal);
         } catch (error: unknown) {
           if (signal.aborted) throw createAbortError();
-          if (!(error instanceof ProviderRateLimitError) || attempt >= this.options.maxRetries) {
+          if (
+            !(error instanceof ProviderRateLimitError)
+            || this.inner.rateLimitRetryMode === 'none'
+            || attempt >= this.options.maxRetries
+          ) {
             throw error;
           }
           const delayMs = error.retryAfterMs

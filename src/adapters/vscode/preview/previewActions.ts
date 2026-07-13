@@ -20,12 +20,7 @@ export function getActivePreviewPanel(previewRegistry: PreviewRegistry): Preview
 }
 
 export function getActivePreviewDocument(previewRegistry: PreviewRegistry): vscode.TextDocument | undefined {
-  const activeUri = getActivePreviewPanel(previewRegistry)?.editorDocumentUri;
-  if (!activeUri) return undefined;
-
-  return vscode.workspace.textDocuments.find(
-    document => document.uri.toString() === activeUri.toString()
-  );
+  return getActivePreviewPanel(previewRegistry)?.editorDocument;
 }
 
 export async function retranslatePreviewDocument(args: RetranslatePreviewArgs): Promise<boolean> {

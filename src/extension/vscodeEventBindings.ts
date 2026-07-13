@@ -23,7 +23,7 @@ function bindConfigurationChanges(services: ExtensionServices): void {
       for (const documentUri of previewRegistry.getDocumentUris()) {
         const document = vscode.workspace.textDocuments.find(
           candidate => candidate.uri.toString() === documentUri
-        );
+        ) ?? previewRegistry.getDocument(documentUri);
         if (document) {
           await previewRegistry.createOrShow(context.extensionUri, document, { avoidOpeningSource: true });
         }

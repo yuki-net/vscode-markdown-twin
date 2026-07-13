@@ -6,6 +6,7 @@ export class PapagoProvider implements TranslationProvider {
   readonly id = 'papago';
   readonly name = 'Papago (Naver)';
   readonly requiresApiKey = true;
+  readonly rateLimitRetryMode = 'none';
 
   private clientId: string;
   private clientSecret: string;
@@ -22,17 +23,36 @@ export class PapagoProvider implements TranslationProvider {
 
     // Papago accepts one text per request. Keep a small bounded pool so a large
     // translation batch cannot fan out into an unbounded number of HTTP calls.
+    const batchController = new AbortController();
+    const abortBatch = () => batchController.abort();
+    if (signal.aborted) abortBatch();
+    else signal.addEventListener('abort', abortBatch, { once: true });
+
     const results = new Array<string>(texts.length);
     let nextIndex = 0;
     const worker = async (): Promise<void> => {
-      while (nextIndex < texts.length) {
+      while (!batchController.signal.aborted && nextIndex < texts.length) {
         const index = nextIndex++;
-        results[index] = await this.translateOne(texts[index], sourceLang, targetLang, signal);
+        results[index] = await this.translateOne(
+          texts[index],
+          sourceLang,
+          targetLang,
+          batchController.signal
+        );
       }
     };
     const concurrency = Math.min(3, texts.length);
-    await Promise.all(Array.from({ length: concurrency }, () => worker()));
-    return results;
+    const workers = Array.from({ length: concurrency }, () => worker());
+    try {
+      await Promise.all(workers);
+      return results;
+    } catch (error: unknown) {
+      batchController.abort();
+      await Promise.allSettled(workers);
+      throw error;
+    } finally {
+      signal.removeEventListener('abort', abortBatch);
+    }
   }
 
   private async translateOne(text: string, sourceLang: string, targetLang: string, signal: AbortSignal): Promise<string> {
