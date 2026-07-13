@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { normalizeBatchSize, TranslationManager } from '../translationManager';
+import { createTranslationCacheKey, type TranslationSpec } from '../domain/translationSpec';
 const targetsByDocument = new Map<string, string[]>();
 const translationTargets = {
   hasDocument: (documentUri: string) => targetsByDocument.has(documentUri),
@@ -48,8 +49,15 @@ describe('TranslationManager', () => {
       getText: () => '原文です。',
     } as any;
 
+    const spec: TranslationSpec = {
+      providerId: 'google-cloud',
+      sourceLanguage: 'auto',
+      targetLanguages: ['ko'],
+      providerOptionsKey: 'default',
+    };
+    (manager as any).documentSpecs.set(document.uri.toString(), spec);
     (manager as any).cache
-      .ensureDocumentCache(document.uri, 'ko')
+      .ensureDocumentCache(document.uri, createTranslationCacheKey(spec, 'ko'))
       .set('原文です。', 'Translated sentence.');
 
     await manager.toggleMode();

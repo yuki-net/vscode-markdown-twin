@@ -18,6 +18,7 @@ import { createTranslationProvider } from './providers/providerRegistry';
 import { TranslationCache } from './translationCache';
 import { DocumentTranslationSession, type TranslationRun } from './application/documentTranslationSession';
 import type { TranslationTargetRegistry } from './ports/translationTargetRegistry';
+import { createTranslationCacheKey, type TranslationSpec } from './domain/translationSpec';
 
 export class TranslationManager implements vscode.Disposable {
   private cache = new TranslationCache();
@@ -26,7 +27,7 @@ export class TranslationManager implements vscode.Disposable {
   private statusBar: StatusBar | null = null;
   private md = new MarkdownIt();
   private translationSessions = new Map<string, DocumentTranslationSession>();
-  private currentSourceLang = 'auto';
+  private documentSpecs = new Map<string, TranslationSpec>();
   private outputChannel = vscode.window.createOutputChannel('Markdown Twin');
 
   private onTranslationUpdatedEmitter = new vscode.EventEmitter<vscode.Uri | undefined>();
@@ -97,14 +98,17 @@ export class TranslationManager implements vscode.Disposable {
   }
 
   getTranslation(uri: vscode.Uri, originalContent: string, langCode: string): string | null {
-    const parts = splitTranslatableParts(originalContent, this.currentSourceLang);
+    const spec = this.documentSpecs.get(uri.toString());
+    if (!spec) return null;
+    const parts = splitTranslatableParts(originalContent, spec.sourceLanguage);
+    const cacheKey = createTranslationCacheKey(spec, langCode);
     const translationSlice = new Map<number, string>();
     let transOffset = 0;
 
     let allTranslated = true;
     for (const part of parts) {
       if (part.translate) {
-        const cached = this.cache.get(uri, langCode, part.text);
+        const cached = this.cache.get(uri, cacheKey, part.text);
         if (cached !== undefined) {
           translationSlice.set(transOffset, cached);
         } else {
@@ -141,8 +145,15 @@ export class TranslationManager implements vscode.Disposable {
     this.statusBar?.setActiveProvider(providerId);
 
     const sourceLang = resolveSourceLanguageCode(config.get<string>('sourceLanguage') ?? 'auto');
-    this.currentSourceLang = sourceLang;
     const batchSize = normalizeBatchSize(config.get<number>('batchSize'));
+    const spec: TranslationSpec = {
+      providerId,
+      sourceLanguage: sourceLang,
+      targetLanguages: targetLangs,
+      providerOptionsKey: providerId === 'microsoft'
+        ? `region:${config.get<string>('azureRegion') ?? 'global'}`
+        : 'default',
+    };
 
     this.logInfo(
       `Start translation: provider=${providerId}, source=${sourceLang}, targets=${targetLangs.join(',')}, uri=${document.uri.toString()}`
@@ -167,9 +178,13 @@ export class TranslationManager implements vscode.Disposable {
     }
 
     this.activeDocumentUris.add(docUriStr);
+    this.documentSpecs.set(docUriStr, spec);
     const currentTexts = this.extractTranslatableTexts(document, sourceLang);
     const { langToTranslateMap, totalCount } = this.cache.preparePendingTranslations(
-      document.uri, targetLangs, currentTexts
+      document.uri,
+      targetLangs,
+      currentTexts,
+      targetLanguage => createTranslationCacheKey(spec, targetLanguage)
     );
     this.logInfo(
       `Translation queue: uniqueTexts=${currentTexts.size}, totalPending=${totalCount}, targets=${targetLangs.join(',')}`
@@ -251,7 +266,12 @@ export class TranslationManager implements vscode.Disposable {
       const textsToTranslate = langToTranslateMap.get(targetLang) ?? [];
       if (textsToTranslate.length === 0) continue;
 
-      const docCache = this.cache.ensureDocumentCache(documentUri, targetLang);
+      const spec = this.documentSpecs.get(documentUri.toString());
+      if (!spec) return false;
+      const docCache = this.cache.ensureDocumentCache(
+        documentUri,
+        createTranslationCacheKey(spec, targetLang)
+      );
 
       for (let i = 0; i < textsToTranslate.length; i += batchSize) {
         if (failed || !this.isDocumentActive(documentUri) || !session.isCurrent(run)) break;
@@ -348,6 +368,7 @@ export class TranslationManager implements vscode.Disposable {
     }
 
     this.activeDocumentUris.delete(uriStr);
+    this.documentSpecs.delete(uriStr);
     this.translationSessions.get(uriStr)?.cancel();
     this.translationSessions.delete(uriStr);
     this.statusBar?.removeDocument(uri);
@@ -367,6 +388,7 @@ export class TranslationManager implements vscode.Disposable {
 
   stopTranslation(): void {
     this.activeDocumentUris.clear();
+    this.documentSpecs.clear();
     this.cancelAllDocumentSessions();
     this.debounceTimers.forEach(clearTimeout);
     this.debounceTimers.clear();
@@ -379,11 +401,13 @@ export class TranslationManager implements vscode.Disposable {
   clearAllCache(): void {
     this.cancelAllDocumentSessions();
     this.cache.clear();
+    this.documentSpecs.clear();
     this.onTranslationUpdatedEmitter.fire(undefined);
   }
 
   clearDocumentCache(uri: vscode.Uri): void {
     this.cache.clearDocument(uri);
+    this.documentSpecs.delete(uri.toString());
     this.onTranslationUpdatedEmitter.fire(uri);
   }
 
@@ -413,7 +437,10 @@ export class TranslationManager implements vscode.Disposable {
     langCode: string,
     mode: TranslationViewMode = this.getMode()
   ): TranslatedMarkdownResult {
-    const docCache = this.cache.getDocumentCache(document.uri, langCode);
+    const spec = this.documentSpecs.get(document.uri.toString());
+    const docCache = spec
+      ? this.cache.getDocumentCache(document.uri, createTranslationCacheKey(spec, langCode))
+      : undefined;
     if (!docCache || docCache.size === 0) {
       const text = document.getText();
       const lineCount = text.split(/\r?\n/).length;

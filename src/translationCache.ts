@@ -3,16 +3,16 @@ import * as vscode from 'vscode';
 export class TranslationCache {
   private readonly entries = new Map<string, Map<string, string>>();
 
-  get(documentUri: vscode.Uri, langCode: string, originalText: string): string | undefined {
-    return this.getDocumentCache(documentUri, langCode)?.get(originalText);
+  get(documentUri: vscode.Uri, cacheKey: string, originalText: string): string | undefined {
+    return this.getDocumentCache(documentUri, cacheKey)?.get(originalText);
   }
 
-  getDocumentCache(documentUri: vscode.Uri, langCode: string): Map<string, string> | undefined {
-    return this.entries.get(this.key(documentUri, langCode));
+  getDocumentCache(documentUri: vscode.Uri, cacheKey: string): Map<string, string> | undefined {
+    return this.entries.get(this.key(documentUri, cacheKey));
   }
 
-  ensureDocumentCache(documentUri: vscode.Uri, langCode: string): Map<string, string> {
-    const cacheKey = this.key(documentUri, langCode);
+  ensureDocumentCache(documentUri: vscode.Uri, translationKey: string): Map<string, string> {
+    const cacheKey = this.key(documentUri, translationKey);
     let docCache = this.entries.get(cacheKey);
     if (!docCache) {
       docCache = new Map();
@@ -24,14 +24,15 @@ export class TranslationCache {
   preparePendingTranslations(
     documentUri: vscode.Uri,
     targetLangs: string[],
-    currentTexts: Set<string>
+    currentTexts: Set<string>,
+    keyForTarget: (targetLanguage: string) => string
   ): { langToTranslateMap: Map<string, string[]>; totalCount: number } {
     const allTexts = Array.from(currentTexts);
     let totalCount = 0;
     const langToTranslateMap = new Map<string, string[]>();
 
     for (const targetLang of targetLangs) {
-      const docCache = this.ensureDocumentCache(documentUri, targetLang);
+      const docCache = this.ensureDocumentCache(documentUri, keyForTarget(targetLang));
 
       for (const cachedText of docCache.keys()) {
         if (!currentTexts.has(cachedText)) {
@@ -67,7 +68,7 @@ export class TranslationCache {
     this.entries.clear();
   }
 
-  private key(documentUri: vscode.Uri, langCode: string): string {
-    return `${documentUri.toString()}@${langCode}`;
+  private key(documentUri: vscode.Uri, translationKey: string): string {
+    return `${documentUri.toString()}@${translationKey}`;
   }
 }
