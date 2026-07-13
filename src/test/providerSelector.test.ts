@@ -31,8 +31,7 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension'),
-      {} as any
+      vscode.Uri.file('/extension')
     );
 
     (vscode.window.showQuickPick as jest.Mock).mockImplementation(async items => {
@@ -68,8 +67,7 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension'),
-      {} as any
+      vscode.Uri.file('/extension')
     );
 
     let providerMenuItems: readonly any[] = [];
@@ -100,8 +98,7 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension'),
-      {} as any
+      vscode.Uri.file('/extension')
     );
 
     let apiKeyItems: readonly any[] = [];
@@ -134,8 +131,7 @@ describe('ProviderSelector', () => {
       apiKeyManager,
       translationManager as any,
       statusBar as any,
-      vscode.Uri.file('/extension'),
-      {} as any
+      vscode.Uri.file('/extension')
     );
 
     (vscode.window.showQuickPick as jest.Mock)

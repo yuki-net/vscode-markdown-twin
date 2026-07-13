@@ -152,8 +152,7 @@ export async function activate(context: vscode.ExtensionContext) {
     apiKeyManager,
     translationCoordinator,
     statusBar,
-    context.extensionUri,
-    previewRegistry
+    context.extensionUri
   );
   const services: ExtensionServices = {
     context,

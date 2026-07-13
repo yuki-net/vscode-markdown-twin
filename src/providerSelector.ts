@@ -14,9 +14,7 @@ import {
   normalizeTargetLanguageCode,
 } from './languages';
 import { t } from './i18n';
-import { retranslateActivePreview } from './previewActions';
 import { getAzureRegion, promptAzureRegion } from './azureRegion';
-import { PreviewRegistry } from './previewRegistry';
 import { PROVIDER_DEFINITIONS } from './providers/providerRegistry';
 
 interface ProviderItem extends vscode.QuickPickItem {
@@ -31,8 +29,7 @@ export class ProviderSelector {
     private apiKeyManager: ApiKeyManager,
     private coordinator: TranslationCoordinator,
     private statusBar: StatusBar,
-    private extensionUri: vscode.Uri,
-    private previewRegistry: PreviewRegistry
+    private extensionUri: vscode.Uri
   ) {}
 
   async showMenu(): Promise<void> {
@@ -206,14 +203,7 @@ export class ProviderSelector {
     await config.update('targetLanguage', selected.code, vscode.ConfigurationTarget.Global);
     await vscode.commands.executeCommand('setContext', 'markdownTwin.targetLang', selected.code);
 
-    const activePanel = this.previewRegistry.getActivePanel();
-    if (activePanel) {
-      await this.previewRegistry.createOrShow(this.extensionUri, this.coordinator, activePanel.editorDocument);
-    }
-
-    if (this.coordinator.isActive()) {
-      await retranslateActivePreview(this.coordinator, this.previewRegistry, { clearCache: true });
-    } else {
+    if (!this.coordinator.isActive()) {
       this.statusBar.showOffline();
     }
 
@@ -288,12 +278,7 @@ export class ProviderSelector {
     const config = vscode.workspace.getConfiguration('markdownTwin');
     await config.update('provider', selected.id, vscode.ConfigurationTarget.Global);
 
-    if (this.coordinator.isActive()) {
-      await this.coordinator.rerunAll({
-        clearAllCache: true,
-        overrideProvider: selected.id,
-      });
-    } else {
+    if (!this.coordinator.isActive()) {
       this.statusBar.setActiveProvider(selected.id);
       this.statusBar.showOffline();
     }
