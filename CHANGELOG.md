@@ -2,6 +2,26 @@
 
 All notable changes to Markdown Twin will be documented in this file.
 
+## 1.1.0 - 2026-07-15
+
+### Added
+
+- Support independent translation sessions for multiple Markdown documents.
+- Show combined progress for multiple translations in the status bar.
+- Open Markdown Twin from VS Code's built-in Markdown preview.
+
+### Fixed
+
+- Prevent invalid batch sizes from stalling translation.
+- Correct status bar and preview/source action states.
+- Prevent one document from interrupting another document's translation.
+
+### Major Refactor
+
+- Rebuilt the translation flow around domain, application, port, and adapter layers.
+- Separated preview, settings, provider, status, and translation responsibilities.
+- Expanded regression tests and documented the new architecture.
+
 ## 1.0.0 - 2026-06-13
 
 Initial release of Markdown Twin.
