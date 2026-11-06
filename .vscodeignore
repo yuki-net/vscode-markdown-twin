@@ -10,6 +10,7 @@ markdown-twin-icon.af
 SYNTAX_HIGHLIGHTING_PLAN.md
 .claude/**
 .idea/**
+.run/**
 esbuild.js
 tsconfig.json
 src/**

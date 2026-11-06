@@ -12,19 +12,7 @@
       "outFiles": [
         "${workspaceFolder}/dist/**/*.js"
       ],
-      "preLaunchTask": "${defaultBuildTask}"
-    },
-    {
-      "name": "Build",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "npm.cmd run build"
-    },
-    {
-      "name": "Package VSIX",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "npm.cmd run package"
+      "preLaunchTask": "Build"
     }
   ]
 }

@@ -2,6 +2,14 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Build",
+      "type": "npm",
+      "script": "build",
+      "problemMatcher": "$tsc",
+      "group": "build"
+    },
+    {
+      "label": "Watch",
       "type": "npm",
       "script": "watch",
       "problemMatcher": "$tsc-watch",
@@ -13,6 +21,28 @@
         "kind": "build",
         "isDefault": true
       }
+    },
+    {
+      "label": "Test",
+      "type": "npm",
+      "script": "test",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Package VSIX",
+      "type": "npm",
+      "script": "package",
+      "problemMatcher": []
+    },
+    {
+      "label": "Release Check",
+      "type": "npm",
+      "script": "release:check",
+      "problemMatcher": []
     }
   ]
 }
