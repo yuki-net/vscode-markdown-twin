@@ -1,32 +1,50 @@
-## Summary
+<!--
+【PRタイトル形式】
+[type] <簡潔な説明>
+例:
+- [feat] syntaxTheme 設定の追加
+- [fix] 設定コマンドの拡張IDを修正
+- [docs] コミュニティ標準ファイルの追加
+- [refactor] プレビューの依存関係を整理
 
-<!-- What does this pull request change, and why? -->
+type: feat, fix, refactor, docs, test, chore
+-->
 
-## Related issue
+## このPRで良くなること
+<!-- 指示文のオウム返しではなく、このPRの差分によって何ができるようになるかを1〜2文で簡潔に記載 -->
 
-<!-- Closes #123 -->
+## 変更内容
+<!-- このPRのコード、文書、設定などの変更（差分）で実際に行ったことだけを箇条書きで簡潔に記載 -->
 
-## Type of change
+## 関連 Issue / PR
+<!-- Fixes #123 や PR #45 など。フルURLは書かず #番号 で記載 -->
+Fixes #
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor
-- [ ] Documentation
-- [ ] Other
+## UI確認・スクリーンショット
+<!-- UI/操作感の変更がある場合は必須。Before/Afterが比較できるスクショや動画を貼る -->
+<!-- 画面変更がない場合は「N/A (理由)」と記載 -->
+- [ ] 添付済み / N/A (理由: )
 
-## What changed
+## 検証・再現手順
+<!-- レビュアーが手元で動作確認・追試するための手順 -->
+1. 
+2. 
 
-<!-- Bullet points are fine. -->
+- [ ] ローカル環境で手動テスト済み
+- [ ] `npm run release:check` がパス
+- [ ] 自動テスト（Unit/Integration）を追加・更新した（または不要な理由を記載）
 
-## Testing
+## 影響範囲・注意事項
+<!-- セキュリティ、Windows/macOS/Linux、翻訳プロバイダー、パフォーマンスへの配慮 -->
 
-- [ ] `npm run release:check` passes
-- [ ] Added or updated tests
-- [ ] Verified the behavior in the Extension Development Host (F5)
+## AI Disclosure
+<!-- AIを使用して作成した場合は、使用したモデルやツール名を記載 -->
+- Model: 
 
-## Checklist
-
-- [ ] No API keys, tokens, or private content are included
-- [ ] `CHANGELOG.md` updated for user-facing changes
-- [ ] Localization files updated if UI text or settings changed
-- [ ] Screenshots attached for UI changes
+## チェックリスト
+- [ ] 依頼範囲に絞った変更であること（無関係なリファクタを含まない）
+- [ ] UI変更がある場合、画像・動画を添付した（またはN/A）
+- [ ] `CHANGELOG.md` を更新した（ユーザー向け変更がある場合）
+- [ ] UI文言・設定を追加した場合、全ロケールを更新した
+- [ ] APIキー・トークン・非公開ドキュメントを含まない
+- [ ] 関連するCI・テストがパスしていること
