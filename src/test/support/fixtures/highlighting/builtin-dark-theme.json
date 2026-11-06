@@ -1,0 +1,11 @@
+{
+  "name": "Builtin Dark Fixture",
+  "tokenColors": [
+    {
+      "scope": "keyword.control.simple",
+      "settings": {
+        "foreground": "#0000ff"
+      }
+    }
+  ]
+}

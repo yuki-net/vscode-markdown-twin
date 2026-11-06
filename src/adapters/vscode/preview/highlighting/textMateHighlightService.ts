@@ -37,6 +37,7 @@ export class TextMateHighlightService implements vscode.Disposable {
           if (
             event.affectsConfiguration('workbench.colorTheme')
             || event.affectsConfiguration('editor.tokenColorCustomizations')
+            || event.affectsConfiguration('markdownTwin.syntaxTheme')
           ) {
             this.invalidateTheme();
             this.changeEmitter.fire();

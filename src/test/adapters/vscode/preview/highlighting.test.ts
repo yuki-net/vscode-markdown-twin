@@ -6,11 +6,45 @@ import { testSupportRoot } from '../../../support/paths';
 
 const fixtureRoot = path.join(testSupportRoot, 'fixtures', 'highlighting');
 
-function createFixtureExtension() {
+type FixtureTheme = {
+  id: string;
+  label: string;
+  path: string;
+  uiTheme?: string;
+};
+
+const DEFAULT_FIXTURE_THEMES: FixtureTheme[] = [
+  {
+    id: 'Fixture Theme',
+    label: 'Fixture Theme',
+    path: './child-theme.json',
+  },
+  {
+    id: 'External Theme',
+    label: 'External Theme',
+    path: './external-theme.json',
+  },
+  {
+    id: 'Dark Modern',
+    label: 'Dark Modern',
+    uiTheme: 'vs-dark',
+    path: './builtin-dark-theme.json',
+  },
+  {
+    id: 'Light Modern',
+    label: 'Light Modern',
+    uiTheme: 'vs',
+    path: './builtin-light-theme.json',
+  },
+];
+
+function createFixtureExtension(themes: FixtureTheme[] = DEFAULT_FIXTURE_THEMES) {
   return {
+    id: 'fixture.extension',
     extensionPath: fixtureRoot,
     extensionUri: { fsPath: fixtureRoot },
     packageJSON: {
+      name: 'fixture',
       contributes: {
         languages: [
           { id: 'simple', aliases: ['Simple', 'smp'] },
@@ -34,18 +68,7 @@ function createFixtureExtension() {
             injectTo: ['source.simple'],
           },
         ],
-        themes: [
-          {
-            id: 'Fixture Theme',
-            label: 'Fixture Theme',
-            path: './child-theme.json',
-          },
-          {
-            id: 'External Theme',
-            label: 'External Theme',
-            path: './external-theme.json',
-          },
-        ],
+        themes,
       },
     },
   };
@@ -126,6 +149,85 @@ describe('TextMateThemeResolver', () => {
       scope: 'constant.numeric.simple',
       settings: { foreground: '#112233' },
     });
+  });
+});
+
+describe('TextMateThemeResolver syntax theme mode', () => {
+  it('follows the active theme by default', () => {
+    const resolver = new TextMateThemeResolver(
+      () => [createFixtureExtension()],
+      () => 'Fixture Theme',
+      () => ({})
+    );
+
+    expect(resolver.resolveActiveTheme().id).toBe('Fixture Theme');
+  });
+
+  it('uses the built-in dark theme and ignores theme-specific token customizations', () => {
+    const resolver = new TextMateThemeResolver(
+      () => [createFixtureExtension()],
+      () => 'Fixture Theme',
+      () => ({
+        textMateRules: [
+          {
+            scope: 'keyword.control.simple',
+            settings: { foreground: '#123456' },
+          },
+        ],
+      }),
+      () => 'builtin',
+      () => 2
+    );
+
+    const resolved = resolver.resolveActiveTheme();
+    const settings = resolved.theme.settings ?? [];
+
+    expect(resolved.id).toBe('Dark Modern');
+    expect(settings).toContainEqual({
+      scope: 'keyword.control.simple',
+      settings: { foreground: '#0000ff' },
+    });
+    expect(settings).not.toContainEqual({
+      scope: 'keyword.control.simple',
+      settings: { foreground: '#123456' },
+    });
+  });
+
+  it('selects the built-in light theme for light color themes', () => {
+    const resolver = new TextMateThemeResolver(
+      () => [createFixtureExtension()],
+      () => 'Fixture Theme',
+      () => ({}),
+      () => 'builtin',
+      () => 1
+    );
+
+    const resolved = resolver.resolveActiveTheme();
+
+    expect(resolved.id).toBe('Light Modern');
+    expect(resolved.theme.settings ?? []).toContainEqual({
+      scope: 'keyword.control.simple',
+      settings: { foreground: '#00aa00' },
+    });
+  });
+
+  it('falls back to the active theme when no built-in theme is contributed', () => {
+    const extension = createFixtureExtension([
+      {
+        id: 'Fixture Theme',
+        label: 'Fixture Theme',
+        path: './child-theme.json',
+      },
+    ]);
+    const resolver = new TextMateThemeResolver(
+      () => [extension],
+      () => 'Fixture Theme',
+      () => ({}),
+      () => 'builtin',
+      () => 2
+    );
+
+    expect(resolver.resolveActiveTheme().id).toBe('Fixture Theme');
   });
 });
 

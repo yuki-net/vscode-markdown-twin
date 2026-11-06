@@ -12,9 +12,11 @@ type ThemeRule = {
 };
 
 type ExtensionLike = {
+  id?: string;
   extensionPath?: string;
   extensionUri?: { fsPath: string };
   packageJSON?: {
+    name?: string;
     contributes?: {
       themes?: unknown[];
     };
@@ -24,7 +26,30 @@ type ExtensionLike = {
 type ThemeContribution = {
   id?: unknown;
   label?: unknown;
+  uiTheme?: unknown;
   path?: unknown;
+};
+
+/** Numeric values mirror vscode.ColorThemeKind without importing the runtime enum. */
+const COLOR_THEME_KIND = {
+  light: 1,
+  dark: 2,
+  highContrast: 3,
+  highContrastLight: 4,
+} as const;
+
+const BUILTIN_THEME_IDS: Record<number, string[]> = {
+  [COLOR_THEME_KIND.light]: ['Light Modern', 'Default Light Modern', 'Light+', 'Default Light+'],
+  [COLOR_THEME_KIND.dark]: ['Dark Modern', 'Default Dark Modern', 'Dark+', 'Default Dark+'],
+  [COLOR_THEME_KIND.highContrast]: ['Default High Contrast', 'High Contrast'],
+  [COLOR_THEME_KIND.highContrastLight]: ['Default High Contrast Light', 'High Contrast Light'],
+};
+
+const BUILTIN_UI_THEME: Record<number, string> = {
+  [COLOR_THEME_KIND.light]: 'vs',
+  [COLOR_THEME_KIND.dark]: 'vs-dark',
+  [COLOR_THEME_KIND.highContrast]: 'hc-black',
+  [COLOR_THEME_KIND.highContrastLight]: 'hc-light',
 };
 
 const CUSTOM_TOKEN_SCOPES: Record<string, string[]> = {
@@ -43,10 +68,27 @@ export class TextMateThemeResolver {
     private readonly activeThemeProvider: () => string = () =>
       vscode.workspace.getConfiguration('workbench').get<string>('colorTheme') ?? '',
     private readonly tokenCustomizationsProvider: () => unknown = () =>
-      vscode.workspace.getConfiguration('editor').get<unknown>('tokenColorCustomizations')
+      vscode.workspace.getConfiguration('editor').get<unknown>('tokenColorCustomizations'),
+    private readonly syntaxThemeModeProvider: () => string = () =>
+      vscode.workspace.getConfiguration('markdownTwin').get<string>('syntaxTheme') ?? 'active',
+    private readonly colorThemeKindProvider: () => number = () =>
+      vscode.window.activeColorTheme.kind
   ) {}
 
   resolveActiveTheme(): ResolvedTextMateTheme {
+    if (this.resolveMode() === 'builtin') {
+      const builtin = this.resolveBuiltinTheme();
+      if (builtin) return builtin;
+    }
+
+    return this.resolveThemeFromActiveSettings();
+  }
+
+  private resolveMode(): 'active' | 'builtin' {
+    return this.syntaxThemeModeProvider().trim().toLowerCase() === 'builtin' ? 'builtin' : 'active';
+  }
+
+  private resolveThemeFromActiveSettings(): ResolvedTextMateTheme {
     const themeId = this.activeThemeProvider();
     const rules: ThemeRule[] = [];
     const themePath = this.resolveThemeFilePath(themeId);
@@ -55,30 +97,85 @@ export class TextMateThemeResolver {
     }
     rules.push(...this.readCustomizedTokenRules(themeId));
 
+    return this.createResolvedTheme(themeId, rules);
+  }
+
+  private resolveBuiltinTheme(): ResolvedTextMateTheme | undefined {
+    const kind = this.colorThemeKindProvider();
+    const builtin = this.findBuiltinTheme(kind);
+    if (!builtin) return undefined;
+
+    return this.createResolvedTheme(builtin.id, this.readThemeRules(builtin.path));
+  }
+
+  private createResolvedTheme(id: string, rules: ThemeRule[]): ResolvedTextMateTheme {
     const theme: IRawTheme = {
-      name: `markdown-twin-${themeId || 'default'}`,
+      name: `markdown-twin-${id || 'default'}`,
       settings: rules.map(rule => ({
         scope: rule.scope,
         settings: rule.settings ?? {},
       })),
     };
 
-    return { id: themeId, theme };
+    return { id, theme };
+  }
+
+  private findBuiltinTheme(kind: number): { id: string; path: string } | undefined {
+    const candidates = BUILTIN_THEME_IDS[kind] ?? BUILTIN_THEME_IDS[COLOR_THEME_KIND.dark];
+    for (const candidate of candidates) {
+      const match = this.findThemeContribution(candidate);
+      if (match) return match;
+    }
+
+    const uiTheme = BUILTIN_UI_THEME[kind];
+    if (!uiTheme) return undefined;
+
+    for (const extension of this.extensionsProvider()) {
+      if (!this.isThemeDefaultsExtension(extension)) continue;
+      for (const theme of this.themeContributions(extension)) {
+        if (theme.uiTheme !== uiTheme || typeof theme.path !== 'string') continue;
+        const id = typeof theme.id === 'string'
+          ? theme.id
+          : typeof theme.label === 'string' ? theme.label : 'builtin';
+        return {
+          id,
+          path: path.resolve(this.extensionRoot(extension), theme.path),
+        };
+      }
+    }
+
+    return undefined;
+  }
+
+  private findThemeContribution(themeId: string): { id: string; path: string } | undefined {
+    for (const extension of this.extensionsProvider()) {
+      const hit = this.themeContributions(extension)
+        .find(theme => theme.id === themeId || theme.label === themeId);
+      if (!hit || typeof hit.path !== 'string') continue;
+
+      return {
+        id: typeof hit.id === 'string' ? hit.id : themeId,
+        path: path.resolve(this.extensionRoot(extension), hit.path),
+      };
+    }
+    return undefined;
   }
 
   private resolveThemeFilePath(themeId: string): string | undefined {
-    for (const extension of this.extensionsProvider()) {
-      const themes = extension.packageJSON?.contributes?.themes;
-      if (!Array.isArray(themes)) continue;
+    return this.findThemeContribution(themeId)?.path;
+  }
 
-      const hit = themes
-        .map(theme => theme as ThemeContribution)
-        .find(theme => theme.id === themeId || theme.label === themeId);
-      if (typeof hit?.path !== 'string') continue;
+  private themeContributions(extension: ExtensionLike): ThemeContribution[] {
+    const themes = extension.packageJSON?.contributes?.themes;
+    return Array.isArray(themes) ? themes.map(theme => theme as ThemeContribution) : [];
+  }
 
-      return path.resolve(extension.extensionUri?.fsPath ?? extension.extensionPath ?? '', hit.path);
-    }
-    return undefined;
+  private isThemeDefaultsExtension(extension: ExtensionLike): boolean {
+    return extension.id === 'vscode.theme-defaults' || extension.packageJSON?.name === 'theme-defaults';
+  }
+
+  private extensionRoot(extension: ExtensionLike): string {
+    return extension.extensionUri?.fsPath ?? extension.extensionPath ?? '';
   }
 
   private readThemeRules(themePath: string, visited = new Set<string>()): ThemeRule[] {

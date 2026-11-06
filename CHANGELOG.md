@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Twin will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added `markdownTwin.syntaxTheme` to choose between the active VS Code theme and VS Code's built-in Dark/Light theme for preview syntax highlighting.
+
 ## 1.1.0 - 2026-07-15
 
 ### Added

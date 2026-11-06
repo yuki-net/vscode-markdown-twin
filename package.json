@@ -569,6 +569,20 @@
           "maximum": 10,
           "description": "%markdownTwin.debounceDelay.description%",
           "order": 7
+        },
+        "markdownTwin.syntaxTheme": {
+          "type": "string",
+          "enum": [
+            "active",
+            "builtin"
+          ],
+          "default": "active",
+          "description": "%markdownTwin.syntaxTheme.description%",
+          "order": 8,
+          "enumItemLabels": [
+            "%markdownTwin.syntaxTheme.active%",
+            "%markdownTwin.syntaxTheme.builtin%"
+          ]
         }
       }
     }
