@@ -555,21 +555,6 @@
             "%markdownTwin.defaultMode.bilingual%"
           ]
         },
-        "markdownTwin.batchSize": {
-          "type": "number",
-          "default": 10,
-          "minimum": 1,
-          "description": "%markdownTwin.batchSize.description%",
-          "order": 6
-        },
-        "markdownTwin.debounceDelay": {
-          "type": "number",
-          "default": 2,
-          "minimum": 1,
-          "maximum": 10,
-          "description": "%markdownTwin.debounceDelay.description%",
-          "order": 7
-        },
         "markdownTwin.syntaxTheme": {
           "type": "string",
           "enum": [
@@ -578,11 +563,26 @@
           ],
           "default": "active",
           "description": "%markdownTwin.syntaxTheme.description%",
-          "order": 8,
+          "order": 6,
           "enumItemLabels": [
             "%markdownTwin.syntaxTheme.active%",
             "%markdownTwin.syntaxTheme.builtin%"
           ]
+        },
+        "markdownTwin.batchSize": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "%markdownTwin.batchSize.description%",
+          "order": 7
+        },
+        "markdownTwin.debounceDelay": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%markdownTwin.debounceDelay.description%",
+          "order": 8
         }
       }
     }
