@@ -2,6 +2,12 @@
 
 All notable changes to Markdown Twin will be documented in this file.
 
+## 1.2.1 - 2026-11-07
+
+### Fixed
+
+- Updated bundled dependencies to address security advisories in `markdown-it`, `linkify-it`, and `@xmldom/xmldom`.
+
 ## 1.2.0 - 2026-11-07
 
 ### Added
