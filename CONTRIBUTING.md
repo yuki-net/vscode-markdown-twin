@@ -6,7 +6,7 @@ By participating, you agree to follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Prerequisites
 
-- Node.js 20 or later
+- Node.js 22 or later
 - npm 10 or later
 - VS Code 1.85 or later
 
