@@ -33,7 +33,7 @@ jobs:
         run: npm run release:check
 
       - name: Upload VSIX
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vscode-markdown-twin-vsix
           path: "*.vsix"
