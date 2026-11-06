@@ -11,6 +11,7 @@ SYNTAX_HIGHLIGHTING_PLAN.md
 .claude/**
 .idea/**
 .run/**
+scripts/**
 esbuild.js
 tsconfig.json
 src/**

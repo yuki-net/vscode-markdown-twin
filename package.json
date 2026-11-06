@@ -52,9 +52,10 @@
     "vscode:prepublish": "npm run bundle",
     "build": "npm run compile && npm run bundle",
     "bundle": "node esbuild.js",
+    "check:icon": "node scripts/check-icon.js",
     "compile": "tsc -p ./ --noEmit",
     "package": "vsce package",
-    "release:check": "npm run compile && npm test -- --runInBand && npm run bundle && npm run package",
+    "release:check": "npm run compile && npm run check:icon && npm test -- --runInBand && npm run bundle && npm run package",
     "watch": "node esbuild.js --watch",
     "test": "jest"
   },
