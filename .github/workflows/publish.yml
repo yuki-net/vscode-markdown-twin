@@ -1,0 +1,67 @@
+name: Publish
+
+# The filename is referenced by the Marketplace Trusted Publishing policy.
+# Do not rename this file without updating the policy in the Marketplace publisher page.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: marketplace-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to Marketplace
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve version
+        id: version
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release tag points at HEAD
+        run: |
+          git fetch --tags --force
+          tag="v${{ steps.version.outputs.value }}"
+          if ! git tag --points-at HEAD | grep -qx "$tag"; then
+            echo "::error::Tag $tag does not point at HEAD ($(git rev-parse --short HEAD))."
+            exit 1
+          fi
+
+      - name: Run release checks
+        run: npm run release:check
+
+      - name: Publish to Visual Studio Marketplace
+        run: npx vsce publish --oidc --packagePath "markdown-twin-${{ steps.version.outputs.value }}.vsix"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ steps.version.outputs.value }}"
+          vsix="markdown-twin-${{ steps.version.outputs.value }}.vsix"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$vsix" --clobber
+          else
+            gh release create "$tag" "$vsix" --title "$tag" --generate-notes
+          fi
