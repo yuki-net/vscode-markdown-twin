@@ -15,6 +15,7 @@ esbuild.js
 tsconfig.json
 src/**
 dist/test/**
+dist/**/*.map
 jest.config.js
 package-lock.json
 node_modules/**

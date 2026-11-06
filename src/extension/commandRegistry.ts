@@ -142,7 +142,7 @@ export function registerCommands(services: ExtensionServices): void {
   register(context, 'markdownTwin.setApiKey', () => providerSelector.showApiKeyPicker());
   register(context, 'markdownTwin.configureAzureRegion', () => promptAzureRegion(settingsRepository));
   register(context, 'markdownTwin.openSettings', () =>
-    vscode.commands.executeCommand('workbench.action.openSettings', '@ext:yukiidayo.vscode-markdown-twin')
+    vscode.commands.executeCommand('workbench.action.openSettings', '@ext:yukiidayo.markdown-twin')
   );
   register(context, 'markdownTwin.copyTranslatedMarkdown', async () => {
     const panel = previewRegistry.getActivePanel();
