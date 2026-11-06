@@ -1,0 +1,99 @@
+name: Bug report
+description: Report a problem with Markdown Twin
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please **do not include API keys, tokens, or private document content**.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: A short description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a Markdown file
+        2. Select ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Markdown Twin version
+      placeholder: "1.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      description: Help > About (or Code > About Visual Studio Code on macOS)
+      placeholder: "1.95.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Translation provider
+      options:
+        - Google Cloud
+        - Azure Translator
+        - DeepL
+        - Papago
+        - Not applicable
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Copy from the output panel **Markdown Twin** (View > Output). Remove secrets first.
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed API keys, tokens, and private content from this report.
+          required: true
+        - label: I searched existing issues before opening this one.
+          required: true

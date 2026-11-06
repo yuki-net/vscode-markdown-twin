@@ -5,6 +5,10 @@
 .vscodeignore
 README.ja.md
 markdown-twin.md
+ACCESSIBILITY.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+SECURITY.md
 icon.svg
 markdown-twin-icon.af
 SYNTAX_HIGHLIGHTING_PLAN.md

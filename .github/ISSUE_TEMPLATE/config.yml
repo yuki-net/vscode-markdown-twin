@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Marketplace listing
+    url: https://marketplace.visualstudio.com/items?itemName=yukiidayo.markdown-twin
+    about: Install Markdown Twin and read the published version notes
+  - name: Documentation
+    url: https://github.com/yuki-net/vscode-markdown-twin#readme
+    about: Setup, features, and architecture overview
+  - name: Report a security vulnerability
+    url: https://github.com/yuki-net/vscode-markdown-twin/security/advisories/new
+    about: Please report security issues privately, not as public issues
