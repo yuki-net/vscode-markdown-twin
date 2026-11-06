@@ -8,11 +8,11 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yukiidayo/vscode-markdown-twin.git"
+    "url": "https://github.com/yuki-net/vscode-markdown-twin.git"
   },
-  "homepage": "https://github.com/yukiidayo/vscode-markdown-twin#readme",
+  "homepage": "https://github.com/yuki-net/vscode-markdown-twin#readme",
   "bugs": {
-    "url": "https://github.com/yukiidayo/vscode-markdown-twin/issues"
+    "url": "https://github.com/yuki-net/vscode-markdown-twin/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
